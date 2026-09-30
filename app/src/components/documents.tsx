@@ -1,54 +1,93 @@
-import type { Company, Estimate, Invoice, JobVehicle, LineItem } from "@/lib/domain";
-import { TOW_EVENT_LABELS, TOW_EVENTS } from "@/lib/domain";
-import { formatMoney, GST_PERCENT, lineTotalCents } from "@/lib/money";
-import { formatDateTime } from "@/lib/time";
+import type { ReactNode } from "react";
 
-function vehicleText(v: JobVehicle) {
-  return [v.plate && `${v.plate} (${v.province})`, [v.year, v.colour, v.make, v.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
-}
+import { Icon } from "@/components/icons";
+import { CompanyMark } from "@/components/ui";
+import type { Company, Estimate, Invoice, LineItem } from "@/lib/domain";
+import { TOW_EVENT_LABELS, TOW_EVENTS } from "@/lib/domain";
+import { vehicleName } from "@/lib/describe";
+import { formatMoney, GST_PERCENT, lineTotalCents, unitText } from "@/lib/money";
+import { formatDateTime } from "@/lib/time";
 
 function ItemsTable({ items, subtotalCents, gstCents, totalCents, totalLabel }: { items: LineItem[]; subtotalCents: number; gstCents: number; totalCents: number; totalLabel: string }) {
   return (
-    <table className="w-full text-sm">
-      <tbody>
+    <div>
+      <ul>
         {items.map((item) => (
-          <tr key={item.id} className="border-b border-slate-100 align-top">
-            <td className="py-2 pr-2">
-              <p className="font-medium text-slate-900">{item.label}</p>
-              <p className="text-xs text-slate-500">
-                {item.quantity} × {formatMoney(item.unitCents)}
-                {item.unitLabel ? ` per ${item.unitLabel}` : ""}
+          <li key={item.id} className="flex items-start justify-between gap-3 border-b border-line-soft py-2.5 text-sm">
+            <div>
+              <p className="font-semibold text-ink">{item.label}</p>
+              <p className="text-xs text-muted">
+                {item.unitLabel ? `${unitText(item.quantity, item.unitLabel)} × ${formatMoney(item.unitCents)}` : item.quantity === 1 ? "" : `${item.quantity} × ${formatMoney(item.unitCents)}`}
               </p>
-            </td>
-            <td className="py-2 text-right tabular-nums">{formatMoney(lineTotalCents(item))}</td>
-          </tr>
+            </div>
+            <p className="tabular-nums">{formatMoney(lineTotalCents(item))}</p>
+          </li>
         ))}
-        <tr>
-          <td className="pt-3 text-slate-600">Subtotal</td>
-          <td className="pt-3 text-right tabular-nums">{formatMoney(subtotalCents)}</td>
-        </tr>
-        <tr>
-          <td className="text-slate-600">GST ({GST_PERCENT}%)</td>
-          <td className="text-right tabular-nums">{formatMoney(gstCents)}</td>
-        </tr>
-        <tr className="text-lg font-bold">
-          <td className="pt-2">{totalLabel}</td>
-          <td className="pt-2 text-right tabular-nums">{formatMoney(totalCents)}</td>
-        </tr>
-      </tbody>
-    </table>
+      </ul>
+      <div className="mt-3 space-y-1 text-sm">
+        <div className="flex justify-between text-muted">
+          <span>Subtotal</span>
+          <span className="tabular-nums">{formatMoney(subtotalCents)}</span>
+        </div>
+        <div className="flex justify-between text-muted">
+          <span>GST ({GST_PERCENT}%)</span>
+          <span className="tabular-nums">{formatMoney(gstCents)}</span>
+        </div>
+      </div>
+      <div className="mt-3 flex items-end justify-between rounded-md bg-mint px-3 py-3">
+        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-pine">{totalLabel}</span>
+        <span className="text-[28px] font-extrabold leading-none tracking-tight tabular-nums text-ink">{formatMoney(totalCents)}</span>
+      </div>
+    </div>
   );
 }
 
-function BusinessBlock({ company }: { company: Company }) {
+function DocHeader({ company, kicker, title, meta }: { company: Company; kicker: string; title: ReactNode; meta: ReactNode }) {
   return (
-    <div>
-      <p className="text-xl font-bold text-slate-900">{company.name}</p>
-      <p className="text-sm text-slate-600">{company.address}</p>
-      <p className="text-sm text-slate-600">
+    <div className="border-b border-line-soft pb-4">
+      <div className="flex items-center gap-3">
+        <CompanyMark company={company} />
+        <div className="min-w-0">
+          <p className="truncate text-lg font-extrabold tracking-tight text-ink">{company.name}</p>
+          <p className="text-xs text-muted">{company.phone}</p>
+        </div>
+      </div>
+      <p className="mt-5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-pine">{kicker}</p>
+      <h2 className="mt-1 text-2xl font-extrabold leading-tight tracking-[-0.04em] text-ink">{title}</h2>
+      <p className="mt-1 text-xs text-muted">{meta}</p>
+    </div>
+  );
+}
+
+function Route({ from, to }: { from: string; to: string }) {
+  return (
+    <div className="grid grid-cols-[20px_1fr] gap-x-3 text-sm">
+      <span className="mt-1 grid h-4 w-4 place-items-center rounded-full border-2 border-pine" />
+      <div>
+        <p className="text-xs text-muted">Pickup</p>
+        <p className="font-medium text-ink">{from || "—"}</p>
+      </div>
+      <span className="mx-auto my-1 h-6 w-0.5 bg-line" />
+      <span />
+      <Icon name="mapPin" className="h-5 w-5 text-pine" />
+      <div>
+        <p className="text-xs text-muted">Destination</p>
+        <p className="font-semibold text-ink">{to || "—"}</p>
+      </div>
+    </div>
+  );
+}
+
+function BusinessFooter({ company }: { company: Company }) {
+  return (
+    <div className="mt-5 border-t border-line-soft pt-4 text-xs leading-relaxed text-muted">
+      <p className="font-semibold text-ink">{company.name}</p>
+      <p>{company.address}</p>
+      <p>
         {company.phone}
         {company.email ? ` · ${company.email}` : ""}
       </p>
+      {company.gstNumber ? <p>GST no. {company.gstNumber}</p> : null}
     </div>
   );
 }
@@ -56,46 +95,43 @@ function BusinessBlock({ company }: { company: Company }) {
 export function EstimateDocument({ company, estimate, jobNumber }: { company: Company; estimate: Estimate; jobNumber: string }) {
   const contact = [estimate.customer.mobile, estimate.customer.email].filter(Boolean).join(" · ");
   return (
-    <article className="print-plain rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
-        <BusinessBlock company={company} />
-        <div className="shrink-0 text-right">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Written estimate</p>
-          <p className="text-sm font-semibold text-slate-900">
-            {jobNumber} · v{estimate.version}
-          </p>
-          <p className="text-xs text-slate-500">{formatDateTime(estimate.issuedAt)}</p>
-        </div>
-      </div>
+    <article className="print-plain rounded-lg border border-line bg-paper p-5 shadow-[0_18px_50px_#1f362812]">
+      <DocHeader
+        company={company}
+        kicker={`Estimate #${jobNumber}${estimate.version > 1 ? ` · v${estimate.version}` : ""}`}
+        title="Your tow estimate"
+        meta={`Issued ${formatDateTime(estimate.issuedAt)}`}
+      />
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 py-4 text-sm">
-        <dt className="text-slate-500">Prepared for</dt>
-        <dd className="font-medium">{estimate.customer.name}</dd>
-        <dt className="text-slate-500">Contact</dt>
-        <dd>{contact || "—"}</dd>
-        <dt className="text-slate-500">Vehicle</dt>
-        <dd>{vehicleText(estimate.vehicle) || "—"}</dd>
-        <dt className="text-slate-500">From</dt>
-        <dd>{estimate.pickup || "—"}</dd>
-        <dt className="text-slate-500">To</dt>
-        <dd className="font-medium">{estimate.destination}</dd>
-      </dl>
+      <div className="space-y-4 py-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted">Prepared for</p>
+            <p className="font-semibold text-ink">{estimate.customer.name}</p>
+            <p className="text-xs text-muted">{contact || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Vehicle</p>
+            <p className="font-semibold text-ink">{vehicleName(estimate.vehicle)}</p>
+            <p className="text-xs text-muted">
+              {estimate.vehicle.plate} ({estimate.vehicle.province})
+            </p>
+          </div>
+        </div>
+        <Route from={estimate.pickup} to={estimate.destination} />
+      </div>
 
       <ItemsTable items={estimate.items} subtotalCents={estimate.subtotalCents} gstCents={estimate.gstCents} totalCents={estimate.totalCents} totalLabel="Estimated total" />
 
-      <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
-        <strong>Storage:</strong> {formatMoney(estimate.storagePerDayCents)} per day (plus GST) while your vehicle is stored with us.
+      <p className="mt-4 flex items-start gap-2 rounded-md border border-line-soft bg-white p-3 text-sm text-ink">
+        <Icon name="building" className="mt-0.5 h-4 w-4 text-pine" />
+        <span>
+          <strong>Storage:</strong> {formatMoney(estimate.storagePerDayCents)} per day (plus GST) if your vehicle is stored at our yard.
+        </span>
       </p>
 
-      <div className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-950 ring-1 ring-sky-200">
-        <p className="font-semibold">Your rights</p>
-        <ul className="mt-1 list-disc space-y-1 pl-5">
-          <li>We must give you this written estimate and get your consent before towing your vehicle.</li>
-          <li>You can ask questions before you agree. You don&apos;t have to consent.</li>
-          <li>You&apos;ll get an itemized invoice before you pay.</li>
-          <li>If your vehicle is moved somewhere else, we&apos;ll let you know.</li>
-        </ul>
-      </div>
+      {estimate.notes ? <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted">{estimate.notes}</p> : null}
+      <BusinessFooter company={company} />
     </article>
   );
 }
@@ -103,46 +139,52 @@ export function EstimateDocument({ company, estimate, jobNumber }: { company: Co
 export function InvoiceDocument({ company, invoice, jobNumber }: { company: Company; invoice: Invoice; jobNumber: string }) {
   const contact = [invoice.customer.mobile, invoice.customer.email].filter(Boolean).join(" · ");
   return (
-    <article className="print-plain rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
-        <div>
-          <BusinessBlock company={company} />
-          {company.gstNumber ? <p className="text-xs text-slate-500">GST no. {company.gstNumber}</p> : null}
+    <article className="print-plain rounded-lg border border-line bg-paper p-5 shadow-[0_18px_50px_#1f362812]">
+      <DocHeader company={company} kicker={`Invoice · Job #${jobNumber}`} title={invoice.number} meta={`Issued ${formatDateTime(invoice.issuedAt)}`} />
+
+      <div className="space-y-4 py-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted">Billed to</p>
+            <p className="font-semibold text-ink">{invoice.customer.name || "—"}</p>
+            <p className="text-xs text-muted">{contact || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Vehicle</p>
+            <p className="font-semibold text-ink">{vehicleName(invoice.vehicle)}</p>
+            <p className="text-xs text-muted">
+              {invoice.vehicle.plate} ({invoice.vehicle.province})
+            </p>
+          </div>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Invoice</p>
-          <p className="text-lg font-bold text-slate-900">{invoice.number}</p>
-          <p className="text-xs text-slate-500">Issued {formatDateTime(invoice.issuedAt)}</p>
-          <p className="text-xs text-slate-500">Job {jobNumber}</p>
-        </div>
+        <Route from={invoice.pickup} to={invoice.destination} />
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-line-soft bg-white p-3 text-xs">
+          {TOW_EVENTS.map((e) => (
+            <div key={e} className="contents">
+              <dt className="text-muted">{TOW_EVENT_LABELS[e]}</dt>
+              <dd className="text-right tabular-nums text-ink">{formatDateTime(invoice.tow[e])}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 py-4 text-sm">
-        <dt className="text-slate-500">Customer</dt>
-        <dd className="font-medium">{invoice.customer.name || "—"}</dd>
-        <dt className="text-slate-500">Contact</dt>
-        <dd>{contact || "—"}</dd>
-        <dt className="text-slate-500">Vehicle</dt>
-        <dd>{vehicleText(invoice.vehicle) || "—"}</dd>
-        <dt className="text-slate-500">Pickup</dt>
-        <dd>{invoice.pickup}</dd>
-        <dt className="text-slate-500">Delivered to</dt>
-        <dd>{invoice.destination}</dd>
-        {TOW_EVENTS.map((e) => (
-          <Row key={e} label={TOW_EVENT_LABELS[e]} value={formatDateTime(invoice.tow[e])} />
-        ))}
-      </dl>
-
       <ItemsTable items={invoice.items} subtotalCents={invoice.subtotalCents} gstCents={invoice.gstCents} totalCents={invoice.totalCents} totalLabel="Total" />
+      {invoice.notes ? <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-muted">{invoice.notes}</p> : null}
+      <BusinessFooter company={company} />
     </article>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** The towing company's own consent wording, labelled as theirs. */
+export function CompanyConsentBlock({ heading, wording, version, children }: { heading: string; wording: string; version: number; children?: ReactNode }) {
   return (
-    <>
-      <dt className="text-slate-500">{label}</dt>
-      <dd>{value}</dd>
-    </>
+    <section className="rounded-lg border-2 border-forest bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="text-lg font-extrabold leading-snug tracking-tight text-ink">{heading}</h3>
+        <span className="shrink-0 rounded bg-mint px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-pine">v{version}</span>
+      </div>
+      <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-ink">{wording}</p>
+      {children ? <div className="mt-4">{children}</div> : null}
+    </section>
   );
 }

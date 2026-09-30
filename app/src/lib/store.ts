@@ -2,11 +2,13 @@
 // Every job mutation goes through `mutateJob`, which supplies the Actor so the audit row is always written.
 import { useSyncExternalStore } from "react";
 
-import type { Actor, Job, RequestType } from "@/lib/domain";
-import { GuardrailError } from "@/lib/jobs";
+import type { Actor, Job, RateCard, RequestType, ScenarioId, Workflow } from "@/lib/domain";
+import { createJob, GuardrailError } from "@/lib/jobs";
+import { scenarioFor } from "@/lib/scenarios";
 import { buildSeedState, type AppState } from "@/lib/seed";
+import { currentConsentTemplate } from "@/lib/tow-rules";
 
-const STORAGE_KEY = "towledger:v2";
+const STORAGE_KEY = "towledger:v3";
 
 let state: AppState | null = null;
 const listeners = new Set<() => void>();
@@ -16,7 +18,7 @@ function load(): AppState {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as AppState;
-      if (parsed.schemaVersion === 2) return parsed;
+      if (parsed.schemaVersion === 3) return parsed;
     }
   } catch {
     // Corrupt or unavailable storage: fall back to demo data below.
@@ -36,7 +38,7 @@ function persist(next: AppState) {
   } catch (error) {
     throw new StorageError(
       error instanceof DOMException && error.name === "QuotaExceededError"
-        ? "This device is out of space for TowLedger records. Try a shorter audio clip or export and clear old demo jobs."
+        ? "This device is out of space for TowLedger records. Try a shorter audio clip, a smaller photo, or reset the demo jobs."
         : "Couldn't save on this device.",
     );
   }
@@ -97,16 +99,68 @@ export function deviceLabel(): string {
   return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? "Phone" : "Computer";
 }
 
+export function currentUser(app: AppState) {
+  return app.team.find((m) => m.id === app.currentUserId) ?? app.team[0];
+}
+
 export function currentUserName(app: AppState): string {
-  return app.team.find((m) => m.id === app.currentUserId)?.name ?? "Unknown user";
+  return currentUser(app)?.name ?? "Unknown user";
 }
 
 export function actorFor(app: AppState, overrides?: Partial<Actor>): Actor {
-  return { by: currentUserName(app), device: deviceLabel(), now: new Date().toISOString(), ...overrides };
+  const user = currentUser(app);
+  return {
+    by: user?.name ?? "Unknown user",
+    role: user?.role === "owner" ? "owner" : "driver",
+    device: deviceLabel(),
+    now: new Date().toISOString(),
+    ...overrides,
+  };
 }
+
+// ---------------------------------------------------------------------------
+// Company configuration lookups
 
 export function requestTypeFor(app: AppState, job: Job): RequestType | undefined {
   return app.requestTypes.find((t) => t.id === job.requestTypeId);
+}
+
+export function workflowForType(app: AppState, type: RequestType | undefined): Workflow | undefined {
+  return type ? app.workflows.find((w) => w.id === type.workflowId) : undefined;
+}
+
+export function rateCardFor(app: AppState, workflow: Pick<Workflow, "rateCardId"> | null | undefined): RateCard {
+  return app.rateCards.find((r) => r.id === workflow?.rateCardId) ?? app.rateCards[0];
+}
+
+export function activeConsentTemplate(app: AppState) {
+  return currentConsentTemplate(app.consentTemplates);
+}
+
+export function yardDestination(app: AppState): string {
+  const yard = app.yards[0];
+  return yard ? `${yard.name} — ${yard.address}` : "";
+}
+
+/** Creates a job (optionally from a demo scenario) and returns its id. */
+export function startJob(scenarioId?: ScenarioId): string {
+  let id = "";
+  setAppState((current) => {
+    const scenario = scenarioFor(scenarioId);
+    const prefill = scenario?.prefill;
+    const type = current.requestTypes.find((t) => t.id === prefill?.requestTypeId);
+    const job = createJob({
+      number: String(current.counters.job),
+      actor: actorFor(current),
+      rateCard: rateCardFor(current, workflowForType(current, type)),
+      defaultDestination: prefill?.destination ?? yardDestination(current),
+      scenario: scenario?.id,
+      prefill,
+    });
+    id = job.id;
+    return { ...current, jobs: [job, ...current.jobs], counters: { ...current.counters, job: current.counters.job + 1 } };
+  });
+  return id;
 }
 
 /** Applies a job change (throws on guardrail violations) and returns the updated job. */

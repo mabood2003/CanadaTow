@@ -10,6 +10,11 @@ export function lineTotalCents(item: Pick<LineItem, "quantity" | "unitCents">): 
   return Math.round(item.quantity * item.unitCents);
 }
 
+/** "14 km", "1 day", "2 days" — km never pluralizes. */
+export function unitText(quantity: number, unit: string): string {
+  return `${quantity} ${unit}${unit === "km" || quantity === 1 ? "" : "s"}`;
+}
+
 export function totals(items: Pick<LineItem, "quantity" | "unitCents">[]) {
   const subtotalCents = items.reduce((sum, item) => sum + lineTotalCents(item), 0);
   const gstCents = calculateGst(subtotalCents);

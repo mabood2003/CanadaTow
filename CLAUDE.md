@@ -30,24 +30,32 @@ Source: https://www.alberta.ca/vehicle-towing-and-storage-regulation
 5. **Notify the owner if the vehicle is moved** to another location.
 6. **Police / government-directed tows** follow a different workflow; the reason is recorded.
 
-## Don't hard-code uncertain law
+## Don't hard-code uncertain law — the company configures its process
 
-- Job classification comes from a **config table** (`request_types`), not code. Each type has
-  `workflow: consumer | exempt | to_confirm` and `legal_status: confirmed | to_be_confirmed`.
-  Seed: owner/customer → consumer (confirmed); police, municipality/government → exempt (confirmed);
-  private-property owner, motor club, insurance, owner's representative, other → to_confirm.
-  `to_confirm` jobs default to the full consumer workflow and are labelled
-  "Classification to be confirmed" internally. Never tell the user a job "is exempt" unless confirmed.
-- **No "10% over estimate" rule.** If the invoice differs from the consented estimate, show a
-  neutral warning — "Final amount differs from estimate — confirm customer authorization" — and
-  offer a re-consent step. Don't block on a percentage until counsel confirms one.
-- Never call the app "compliant" in the UI. Say "built for Alberta's towing rules."
+Product boundary: "Your company controls its forms, rates, wording and workflows. TowLedger provides
+tools to deliver, capture, organize and retain the resulting records."
+
+- The software never decides whether a job is "applicable" or "exempt". Each company defines
+  **workflows** (e.g. A Customer-Requested, B Motor Club/Insurer, C Police-Directed, D Private-Property)
+  with toggles for which steps are required before the tow (requester reference, estimate delivered,
+  consent step, destination recorded) and which rate card they use. Each `request_types` row
+  ("who requested this tow") maps to a workflow. The job snapshots its workflow when the request is recorded.
+- UI wording: "Summit Towing workflow: Customer-Requested Tow", "Workflow configured by …",
+  "… workflow complete — ready to proceed." Never "legally authorized", "exempt", "legally valid consent".
+- **Consent wording belongs to the company**: versioned consent templates ("Consent Template — Version 3",
+  effective date, last updated by), company-enabled methods. Consent records store the template version
+  and the exact wording shown. Never label anything "Alberta-approved" or "legally compliant".
+- **No "10% over estimate" rule.** If the invoice differs from the estimate, show a neutral message —
+  "Final amount differs from original estimate. Follow your company's configured approval process." —
+  and offer an optional re-authorization. Don't block on a percentage.
+- Never call the app "compliant" in the UI. Say "built for Alberta's towing rules." Job records are
+  "complete" or "Needs attention", not "compliant".
 
 ## Guardrails (the core value — test these)
 
-- **Tow gate:** "Start tow / Vehicle secured" is locked until estimate sent ✓, consent captured ✓,
-  destination confirmed ✓ — unless the job's workflow is exempt. Before that, show a red banner:
-  "Do not begin tow — consent missing."
+- **Tow gate:** "Vehicle secured" is locked until the steps the job's company workflow requires are
+  done (e.g. estimate delivered ✓, company consent step completed ✓, destination recorded ✓). Before that,
+  show a red banner: "Do not begin tow — consent missing." and make clear it's the company's configured process.
 - **Invoice before payment:** "Record payment" is locked until the invoice is issued.
 - Issued estimates, consents and invoices are immutable; changes create a new version.
 - Every state change writes an append-only audit log row (who, what, when, device).
@@ -61,8 +69,8 @@ Driver (phone):
    Motor club / roadside assistance, Insurance company, Police, Municipality/government,
    Private-property owner, Other. Plus "Who contacted/invited your company?" (for the 200 m
    collision-scene rule).
-3. **Workflow screen** — shows the steps that apply: "Consumer workflow: Estimate → Consent → Tow →
-   Invoice → Record" or "Different/exempt workflow — reason recorded."
+3. **Workflow screen** — "Summit Towing workflow: Customer-Requested Tow" with the steps the company
+   configured (Estimate → Authorization/Consent → Tow → Invoice → Record) and "Workflow configured by …"
 4. **Consenting person** — name, mobile, email (optional), relationship (Owner / Driver / Family
    member / Insurance rep / Motor-club rep / Other), "Customer is physically present" checkbox.
    Not present → steer toward link or audio consent.
@@ -85,11 +93,11 @@ Driver (phone):
     difference warning; big "Issue invoice before recording payment."
 13. **Customer invoice page** — same link: invoice number, details, line items, total,
     Download PDF. No payments.
-14. **Completed job / compliance file** — "Compliance file complete" with ✓ Estimate, Copy
-    delivered, Consent, Invoice, Vehicle details, Locations/times, Archived. Buttons: view
+14. **Completed job record** — "Job record complete" with ✓ Estimate, Estimate delivery record,
+    Consent record, Invoice, Vehicle details, Locations/times, Retained; photos, timeline, notes. Buttons: view
     estimate, consent, invoice, audit trail; Export job file (zip).
-15. **Problem state** — same screen for an incomplete job: "Compliance incomplete: invoice not
-    issued" / "Consent evidence missing," with the fix-it action.
+15. **Problem state** — same screen for an incomplete job: "Needs attention: invoice not
+    issued" / "consent evidence missing," with the fix-it action.
 
 Office (laptop or phone):
 16. **Jobs list** — date, vehicle, driver, request type, estimate, consent, invoice, status;
@@ -109,17 +117,18 @@ Offline:
 - Signature pad on canvas (PNG + metadata). Audio via MediaRecorder.
 - PDFs server-side (@react-pdf/renderer); store a SHA-256 hash of each PDF.
 - Texts via Twilio (Canadian number), email via Resend. In development, log instead of sending.
-- Tests: Vitest (totals, GST, guardrails, classification), Playwright (main flow on a phone viewport).
+- Tests: Vitest (totals, GST, guardrails, workflow config), Playwright (main flow on a phone viewport).
 
 ## Data model
 
-companies (name, address, phone, gst_number, logo) · users (company_id, role: owner | driver) ·
-rate_cards · storage_yards (name, address, hours) · request_types (label, workflow, legal_status) ·
-jobs (request_type_id, invited_by, exempt_reason, status, pickup, destination,
-destination_confirmed, timestamps arrived/secured/departed/delivered) · customers ·
+companies (name, address, phone, gst_number, logo, consent_methods, estimate/invoice notes) · users (company_id, role: owner | driver) ·
+rate_cards · storage_yards (name, address, hours) · workflows (letter, name, required pre-tow steps, rate_card_id) ·
+request_types (label, workflow_id, enabled) · consent_templates (versioned wording, effective_date, updated_by) ·
+jobs (request_type_id, contact_name, contact_reference, workflow_snapshot, status, pickup, destination,
+destination_confirmed_by, notes, timestamps arrived/secured/departed/delivered) · customers ·
 vehicles (plate, province, make, model, year, colour) · estimates (versioned, items, totals,
 delivered_via, delivered_at, public_token) · consents (estimate_id, name, relationship, present,
-method: link | signature | audio | paper_photo, at, evidence_path) · destination_changes
+method: link | signature | audio | paper_photo, at, evidence_path, template_version, wording) · destination_changes
 (authorized_by, reason, notified_at) · photos · invoices + items (issued_at) · payments ·
 audit_log (append-only).
 
@@ -133,7 +142,7 @@ Money in integer cents. GST 5%. Store UTC, display America/Edmonton.
 2. **Screens 1–5** — home, requester, workflow, consenting person, vehicle/tow details.
 3. **Screens 6–10** — estimate builder, review/send, customer page, consent methods, tow gate.
 4. **Screens 11–13** — tow in progress (incl. destination change), invoice, customer invoice page.
-5. **Screens 14–16** — compliance file, problem state, office jobs list, export.
+5. **Screens 14–16** — job record, problem state, office jobs list, export.
 6. **Offline** — screen 17 and the sync queue.
 7. **Interview mode** — a demo company with two scripted scenarios (collision tow a customer
    called in; a motor-club/insurer breakdown tow with preset rates) and a private-property/police

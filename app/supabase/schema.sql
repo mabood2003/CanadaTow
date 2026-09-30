@@ -1,7 +1,5 @@
 create extension if not exists pgcrypto;
 
-create type workflow_type as enum ('consumer', 'exempt', 'to_confirm');
-create type legal_status_type as enum ('confirmed', 'to_be_confirmed');
 create type consent_method_type as enum ('link', 'signature', 'audio', 'paper_photo');
 create type user_role_type as enum ('owner', 'driver');
 create type job_status_type as enum ('new', 'estimate_sent', 'consent_captured', 'tow_in_progress', 'invoice_issued', 'complete', 'problem_state');
@@ -13,6 +11,11 @@ create table if not exists companies (
   phone text,
   gst_number text,
   logo text,
+  email text,
+  -- Company-controlled settings: which consent methods drivers see, and document template text.
+  consent_methods text[] not null default array['link', 'signature', 'audio', 'paper_photo'],
+  estimate_notes text not null default '',
+  invoice_notes text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -28,12 +31,13 @@ create table if not exists users (
 create table if not exists rate_cards (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id) on delete cascade,
-  name text not null default 'Standard rate card',
-  hook_up_cents integer not null default 17500,
-  km_rate_cents integer not null default 350,
-  winch_cents integer not null default 9000,
-  after_hours_cents integer not null default 7000,
-  storage_per_day_cents integer not null default 3500,
+  name text not null default 'Standard rates',
+  description text not null default '',
+  base_tow_cents integer not null default 12500,
+  km_rate_cents integer not null default 450,
+  winch_cents integer not null default 7500,
+  after_hours_cents integer not null default 4000,
+  storage_per_day_cents integer not null default 4500,
   valid_from timestamptz not null default now(),
   valid_to timestamptz,
   created_at timestamptz not null default now()
@@ -48,13 +52,46 @@ create table if not exists storage_yards (
   created_at timestamptz not null default now()
 );
 
+-- Company-defined workflows. The company chooses which steps are required before the tow;
+-- the app enforces that configuration and never decides which legal rules apply.
+create table if not exists workflows (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  letter text not null,
+  name text not null,
+  description text not null default '',
+  require_reference boolean not null default false,
+  reference_label text not null default 'Requester reference',
+  require_estimate boolean not null default true,
+  require_consent boolean not null default true,
+  require_destination boolean not null default true,
+  rate_card_id uuid references rate_cards(id),
+  created_at timestamptz not null default now(),
+  check (not require_consent or require_estimate)
+);
+
+-- "Who requested this tow?" options, each mapped by the company to one of its workflows.
 create table if not exists request_types (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id) on delete cascade,
   label text not null,
-  workflow workflow_type not null,
-  legal_status legal_status_type not null,
+  workflow_id uuid not null references workflows(id),
+  enabled boolean not null default true,
   created_at timestamptz not null default now()
+);
+
+-- Versioned consent wording. Consent records keep the version and the exact text shown.
+create table if not exists consent_templates (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  version integer not null,
+  heading text not null,
+  body text not null,
+  accept_label text not null,
+  effective_date date not null,
+  updated_by text not null,
+  created_at timestamptz not null default now(),
+  unique(company_id, version)
 );
 
 create table if not exists customers (
@@ -84,12 +121,15 @@ create table if not exists jobs (
   request_type_id uuid not null references request_types(id),
   customer_id uuid references customers(id),
   vehicle_id uuid references vehicles(id),
-  invited_by text,
-  exempt_reason text,
+  contact_name text,
+  contact_reference text,
+  -- Snapshot of the company workflow when the request was recorded; later config changes don't alter it.
+  workflow_snapshot jsonb,
+  notes text not null default '',
   status job_status_type not null default 'new',
   pickup_location text,
   destination_location text,
-  destination_confirmed boolean not null default false,
+  destination_confirmed_by text,
   pickup_at timestamptz,
   arrived_at timestamptz,
   secured_at timestamptz,
@@ -122,6 +162,9 @@ create table if not exists consents (
   method consent_method_type not null,
   consented_at timestamptz not null default now(),
   evidence_path text,
+  template_version integer not null,
+  wording_heading text not null,
+  wording text not null,
   created_at timestamptz not null default now()
 );
 
@@ -148,9 +191,13 @@ create table if not exists invoice_items (
 create table if not exists destination_changes (
   id uuid primary key default gen_random_uuid(),
   job_id uuid not null references jobs(id) on delete cascade,
-  authorized_by text not null,
-  reason text not null,
-  notified_at timestamptz not null default now(),
+  from_location text not null,
+  to_location text not null,
+  requested_by text not null,
+  changed_at timestamptz not null,
+  note text not null default '',
+  owner_notified_via text,
+  owner_notified_at timestamptz,
   created_at timestamptz not null default now()
 );
 

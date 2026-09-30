@@ -1,8 +1,28 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+/* TowLedger brand — matches towledger-website.vercel.app */
+@theme {
+  --color-cream: #f3f0e7;
+  --color-paper: #fbfaf6;
+  --color-ink: #152019;
+  --color-forest: #193c2a;
+  --color-forest-hover: #225238;
+  --color-forest-deep: #0e291c;
+  --color-pine: #24573d;
+  --color-signal: #e5ff57;
+  --color-signal-hover: #efff8b;
+  --color-line: #d8d9cf;
+  --color-line-soft: #e5e7e1;
+  --color-sand: #e7e5dc;
+  --color-mint: #e9f0e9;
+  --color-muted: #667067;
+  --color-subtle: #7b837c;
+  --color-ok: #2c754a;
+  --color-danger: #b42318;
+  --color-offline: #ea7a14;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
 html {
@@ -10,7 +30,64 @@ html {
 }
 
 body {
+  background: var(--color-cream);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.035em;
+}
+
+/* Brand mark: forest circle with three signal bars (same construction as the website). */
+.brand-mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-forest);
+}
+.brand-mark::before,
+.brand-mark::after,
+.brand-mark span {
+  content: "";
+  position: absolute;
+  width: 13px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-signal);
+  transform: rotate(-35deg);
+}
+.brand-mark::before {
+  transform: translateY(-5px) rotate(-35deg);
+}
+.brand-mark::after {
+  transform: translateY(5px) rotate(-35deg);
+}
+.brand-mark.small {
+  width: 20px;
+  height: 20px;
+}
+.brand-mark.small::before,
+.brand-mark.small::after,
+.brand-mark.small span {
+  width: 9px;
+  height: 2px;
+}
+.brand-mark.small::before {
+  transform: translateY(-4px) rotate(-35deg);
+}
+.brand-mark.small::after {
+  transform: translateY(4px) rotate(-35deg);
+}
+
+.stage-glow {
+  background: radial-gradient(circle, #e5ff5752, #e5ff5700 65%);
 }
 
 /* Customer documents: "Print" / "Download PDF" use the browser's print-to-PDF until server PDFs land. */

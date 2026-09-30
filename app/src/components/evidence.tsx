@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Icon } from "@/components/icons";
 import { Button } from "@/components/ui";
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#0f172a";
+    ctx.strokeStyle = "#152019";
   }, []);
 
   const point = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -67,15 +68,15 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
         <canvas
           ref={canvasRef}
           aria-label="Signature pad"
-          className="h-44 w-full touch-none rounded-xl bg-white ring-2 ring-slate-300"
+          className="h-44 w-full touch-none rounded-md border-2 border-dashed border-line bg-white"
           onPointerDown={start}
           onPointerMove={move}
           onPointerUp={end}
           onPointerCancel={end}
         />
-        {!hasInk ? <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-sm text-slate-400">Customer signs here</p> : null}
+        {!hasInk ? <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-sm text-subtle">Customer signs here</p> : null}
       </div>
-      <button type="button" onClick={clear} className="mt-2 min-h-10 text-sm font-semibold text-slate-600 underline">
+      <button type="button" onClick={clear} className="mt-2 min-h-10 text-sm font-semibold text-muted underline">
         Clear signature
       </button>
     </div>
@@ -121,7 +122,7 @@ export function AudioRecorder({ script, onChange }: { script: string; onChange: 
   const start = async () => {
     setError(null);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setError("Audio recording needs a secure (https) connection and a supported browser. Use signature or a paper form photo instead.");
+      setError("Audio recording needs a secure (https) connection and a supported browser. Use another consent method instead.");
       return;
     }
     try {
@@ -154,9 +155,9 @@ export function AudioRecorder({ script, onChange }: { script: string; onChange: 
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ask the customer to say</p>
-        <p className="mt-1 italic">“{script}”</p>
+      <div className="rounded-md border border-line-soft bg-paper p-3 text-sm text-ink">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-muted">Read to the customer and ask them to confirm</p>
+        <p className="mt-1 whitespace-pre-line italic">“{script}”</p>
       </div>
       {recording ? (
         <Button variant="danger" full onClick={stop}>
@@ -168,7 +169,7 @@ export function AudioRecorder({ script, onChange }: { script: string; onChange: 
         </Button>
       )}
       {clip ? <audio controls src={clip} className="w-full" /> : null}
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   );
 }
@@ -186,15 +187,17 @@ async function downscale(file: File, maxSide = 1280): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.7);
 }
 
-export function PhotoCapture({ onChange }: { onChange: (dataUrl: string | null) => void }) {
+export function PhotoCapture({ onChange, label = "Take photo", keepPreview = true }: { onChange: (dataUrl: string | null) => void; label?: string; keepPreview?: boolean }) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const onFile = async (file: File | undefined) => {
+  const onFile = async (input: HTMLInputElement) => {
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
     try {
       const dataUrl = await downscale(file);
-      setPhoto(dataUrl);
+      if (keepPreview) setPhoto(dataUrl);
       onChange(dataUrl);
       setError(null);
     } catch {
@@ -202,17 +205,27 @@ export function PhotoCapture({ onChange }: { onChange: (dataUrl: string | null) 
     }
   };
 
+  const pick = "flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-[15px] font-semibold text-ink hover:border-pine/50";
+
   return (
     <div className="space-y-3">
-      <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-white px-4 font-semibold text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50">
-        {photo ? "Retake photo" : "Take photo of signed form"}
-        <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
-      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className={pick}>
+          <Icon name="camera" className="h-[18px] w-[18px] text-pine" />
+          {photo ? "Retake" : label}
+          <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.currentTarget)} />
+        </label>
+        <label className={pick}>
+          <Icon name="upload" className="h-[18px] w-[18px] text-pine" />
+          Upload file
+          <input type="file" accept="image/*" className="sr-only" onChange={(e) => onFile(e.currentTarget)} />
+        </label>
+      </div>
       {photo ? (
         // eslint-disable-next-line @next/next/no-img-element -- local data URL preview
-        <img src={photo} alt="Signed paper form" className="max-h-72 w-full rounded-xl object-contain ring-1 ring-slate-200" />
+        <img src={photo} alt="Captured document" className="max-h-72 w-full rounded-md border border-line-soft object-contain" />
       ) : null}
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   );
 }
