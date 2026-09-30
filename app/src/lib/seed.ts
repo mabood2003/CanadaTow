@@ -29,6 +29,12 @@ import {
 } from "@/lib/jobs";
 import { currentConsentTemplate, currentEstimate } from "@/lib/tow-rules";
 
+/** Team-member id signed in to each app, or null when signed out. */
+export interface Sessions {
+  driver: string | null;
+  owner: string | null;
+}
+
 export interface AppState {
   schemaVersion: 3;
   company: Company;
@@ -40,7 +46,8 @@ export interface AppState {
   documentTemplates: DocumentTemplates;
   yards: Yard[];
   team: TeamMember[];
-  currentUserId: string;
+  /** Who is signed in to each app on this device (pilot stand-in for real sign-in). */
+  sessions: Sessions;
   jobs: Job[];
   counters: { job: number };
   /** Interview mode: show the offline experience without disconnecting. */
@@ -394,6 +401,22 @@ export function buildSeedState(nowMs = Date.now()): AppState {
   waiting = recordDelivery(waiting, at(nowMs, 29, "Terry Boyd"), "estimate", "text", "(403) 555-0791");
   waiting = recordTowEvent(waiting, at(nowMs, 20, "Terry Boyd"), "arrived");
 
+  // #1043 — Private-property (Workflow D): on the road right now, so the owner app has a live tow to show.
+  let onRoad = prepared(config, nowMs, 32, "Mike Chen", {
+    number: "1043",
+    requestTypeId: "private_property",
+    contactName: "Kensington Plaza property management",
+    contactReference: "Signed tow authorization KP-0931",
+    vehicle: { plate: "CRW 7742", province: "AB", make: "Chevrolet", model: "Silverado", year: "2017", colour: "White" },
+    pickup: "Kensington Plaza lot, 1144 Kensington Rd NW, Calgary",
+    destination: yard,
+    destinationConfirmedBy: "Kensington Plaza property management",
+    km: 9,
+  });
+  onRoad = recordTowEvent(onRoad, at(nowMs, 26, "Mike Chen"), "arrived");
+  onRoad = recordTowEvent(onRoad, at(nowMs, 18, "Mike Chen"), "secured");
+  onRoad = recordTowEvent(onRoad, at(nowMs, 14, "Mike Chen"), "departed");
+
   return {
     schemaVersion: 3,
     company: seedCompany,
@@ -405,9 +428,9 @@ export function buildSeedState(nowMs = Date.now()): AppState {
     documentTemplates: seedDocumentTemplates,
     yards: seedYards,
     team: seedTeam,
-    currentUserId: "u-terry",
-    jobs: [waiting, problem, complete, police],
-    counters: { job: 1043 },
+    sessions: { driver: "u-terry", owner: "u-owner" },
+    jobs: [onRoad, waiting, problem, complete, police],
+    counters: { job: 1044 },
     simulateOffline: false,
   };
 }

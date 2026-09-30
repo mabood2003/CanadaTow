@@ -6,6 +6,7 @@ import { useState } from "react";
 import { CompanyConsentBlock, EstimateDocument, InvoiceDocument } from "@/components/documents";
 import { Icon } from "@/components/icons";
 import { Banner, BrandMark, Button, CompanyMark, ErrorText, Field, inputClass, Loading } from "@/components/ui";
+import { baseForRole } from "@/lib/app-base";
 import type { Actor, Estimate, Invoice, Job } from "@/lib/domain";
 import { consentContext, renderConsent } from "@/lib/describe";
 import { GuardrailError, recordConsent, recordDelivery } from "@/lib/jobs";
@@ -76,7 +77,7 @@ function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; jo
           <p className="flex items-center justify-center gap-2 text-xs text-muted">
             <BrandMark small /> Sent with TowLedger · no app or account needed
           </p>
-          <Link href={jobHref(job)} className="inline-block text-xs text-subtle underline">
+          <Link href={jobHref(job, undefined, baseForRole(app.team.find((m) => m.name === job.driverName)?.role))} className="inline-block text-xs text-subtle underline">
             Driver: return to job #{job.number}
           </Link>
         </footer>

@@ -2,10 +2,11 @@
 // Every job mutation goes through `mutateJob`, which supplies the Actor so the audit row is always written.
 import { useSyncExternalStore } from "react";
 
-import type { Actor, Job, RateCard, RequestType, ScenarioId, Workflow } from "@/lib/domain";
+import { appBase, type AppBase } from "@/lib/app-base";
+import type { Actor, Job, RateCard, RequestType, ScenarioId, TeamMember, Workflow } from "@/lib/domain";
 import { createJob, GuardrailError } from "@/lib/jobs";
 import { scenarioFor } from "@/lib/scenarios";
-import { buildSeedState, type AppState } from "@/lib/seed";
+import { buildSeedState, type AppState, type Sessions } from "@/lib/seed";
 import { currentConsentTemplate } from "@/lib/tow-rules";
 
 const STORAGE_KEY = "towledger:v3";
@@ -17,8 +18,8 @@ function load(): AppState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AppState;
-      if (parsed.schemaVersion === 3) return parsed;
+      const parsed = JSON.parse(raw) as AppState & { currentUserId?: string };
+      if (parsed.schemaVersion === 3) return migrate(parsed);
     }
   } catch {
     // Corrupt or unavailable storage: fall back to demo data below.
@@ -30,6 +31,20 @@ function load(): AppState {
     // Private mode etc.: keep working in memory.
   }
   return seeded;
+}
+
+/** Data saved before the owner / driver apps split had one shared "current user". */
+function migrate(saved: AppState & { currentUserId?: string }): AppState {
+  if (saved.sessions) return saved;
+  const { currentUserId, ...rest } = saved;
+  const me = saved.team.find((m) => m.id === currentUserId);
+  return {
+    ...rest,
+    sessions: {
+      driver: me?.role === "driver" ? me.id : (saved.team.find((m) => m.role === "driver" && !m.invited)?.id ?? null),
+      owner: me?.role === "owner" ? me.id : (saved.team.find((m) => m.role === "owner")?.id ?? null),
+    },
+  };
 }
 
 function persist(next: AppState) {
@@ -99,12 +114,30 @@ export function deviceLabel(): string {
   return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? "Phone" : "Computer";
 }
 
-export function currentUser(app: AppState) {
-  return app.team.find((m) => m.id === app.currentUserId) ?? app.team[0];
+export type AppKind = keyof Sessions;
+
+export function appKindFor(base: AppBase): AppKind {
+  return base === "/owner" ? "owner" : "driver";
+}
+
+/** The person signed in to the app that's showing (owner app or driver app). */
+export function currentUser(app: AppState, kind: AppKind = appKindFor(appBase())): TeamMember | undefined {
+  const id = app.sessions[kind];
+  const member = app.team.find((m) => m.id === id);
+  // A session only counts for someone whose role matches the app.
+  return member && member.role === kind ? member : undefined;
 }
 
 export function currentUserName(app: AppState): string {
   return currentUser(app)?.name ?? "Unknown user";
+}
+
+export function signIn(kind: AppKind, memberId: string) {
+  setAppState((s) => ({ ...s, sessions: { ...s.sessions, [kind]: memberId } }));
+}
+
+export function signOut(kind: AppKind) {
+  setAppState((s) => ({ ...s, sessions: { ...s.sessions, [kind]: null } }));
 }
 
 export function actorFor(app: AppState, overrides?: Partial<Actor>): Actor {

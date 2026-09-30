@@ -1,3 +1,4 @@
+import { appBase, type AppBase } from "@/lib/app-base";
 import type { Job } from "@/lib/domain";
 import { currentEstimate, currentInvoice, estimateConsent, jobRecord, type StepKey } from "@/lib/tow-rules";
 
@@ -8,8 +9,9 @@ export interface Step {
   optional?: boolean;
 }
 
-export function jobHref(job: Pick<Job, "id">, step?: StepKey | "audit") {
-  return step ? `/jobs/${job.id}/${step}` : `/jobs/${job.id}`;
+/** Link to a job (or one of its steps) inside the current app — /driver/jobs/… or /owner/jobs/…. */
+export function jobHref(job: Pick<Job, "id">, step?: StepKey | "audit", base: AppBase = appBase()) {
+  return step ? `${base}/jobs/${job.id}/${step}` : `${base}/jobs/${job.id}`;
 }
 
 export function requestComplete(job: Job) {

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("office list shows workflow columns and flags the job missing its invoice", async ({ page }) => {
-  await page.goto("/office");
+test("owner jobs list shows workflow columns and flags the job missing its invoice", async ({ page }) => {
+  await page.goto("/owner/jobs");
   for (const h of ["Job ID", "Date", "Vehicle", "Driver", "Request type", "Workflow", "Estimate", "Consent", "Invoice", "Status"]) {
     await expect(page.getByRole("columnheader", { name: h })).toBeVisible();
   }

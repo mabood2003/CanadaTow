@@ -10,7 +10,8 @@ import { vehicleLine } from "@/lib/describe";
 import { jobHref, jobPhases, PHASE_LABELS, phaseOf } from "@/lib/job-steps";
 import { scenarioFor } from "@/lib/scenarios";
 import type { AppState } from "@/lib/seed";
-import { requestTypeFor, useAppState } from "@/lib/store";
+import { appBase } from "@/lib/app-base";
+import { currentUserName, requestTypeFor, useAppState } from "@/lib/store";
 import { jobStatus, type StepKey } from "@/lib/tow-rules";
 
 export interface JobContext {
@@ -25,10 +26,19 @@ export function JobScreen({ children }: { children: (ctx: JobContext) => ReactNo
   const app = useAppState();
   if (!app) return <Loading />;
   const job = app.jobs.find((j) => j.id === id);
+  const base = appBase();
   if (!job) {
     return (
       <PageShell>
-        <ScreenHeader back={{ href: "/", label: "Home" }} title="Job not found" subtitle="It may have been created on another device." />
+        <ScreenHeader back={{ href: base, label: "Home" }} title="Job not found" subtitle="It may have been created on another device." />
+      </PageShell>
+    );
+  }
+  // Operators only open their own jobs; the owner app sees every job in the company.
+  if (base === "/driver" && job.driverName !== currentUserName(app)) {
+    return (
+      <PageShell>
+        <ScreenHeader back={{ href: base, label: "Home" }} title={`Job #${job.number} belongs to ${job.driverName}`} subtitle="Drivers see their own jobs. Ask the office if you need this one." />
       </PageShell>
     );
   }

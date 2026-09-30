@@ -148,7 +148,7 @@ describe("company-configured workflows", () => {
     expect(() => recordRequest(job, actor(), { requestType: type("police"), workflow: workflow("wf-c"), rateCard: standard, requestOther: "", contactName: " ", contactReference: "" })).toThrow(GuardrailError);
     const noRef = detailedJob("police");
     expect(towGate(noRef).checks.find((c) => c.key === "reference")?.ok).toBe(false);
-    expect(nextHref(noRef, "vehicle")).toBe(`/jobs/${noRef.id}/tow`);
+    expect(nextHref(noRef, "vehicle")).toBe(`/driver/jobs/${noRef.id}/tow`);
   });
 });
 

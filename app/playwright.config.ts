@@ -14,8 +14,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "phone", testMatch: /flow\.spec\.ts/, use: { ...devices["Pixel 7"], channel: "chrome" } },
-    { name: "desktop", testMatch: /office\.spec\.ts/, use: { viewport: { width: 1366, height: 900 } } },
+    // TowLedger Driver is a phone app; TowLedger Owner runs on a laptop and a phone.
+    { name: "phone", testMatch: /(flow|driver)\.spec\.ts/, use: { ...devices["Pixel 7"], channel: "chrome" } },
+    { name: "desktop", testMatch: /(office|owner)\.spec\.ts/, use: { viewport: { width: 1366, height: 900 } } },
+    { name: "owner-phone", testMatch: /owner\.spec\.ts/, use: { ...devices["Pixel 7"], channel: "chrome" } },
     { name: "screens", testMatch: /screens\.spec\.ts/ },
   ],
   webServer: {
