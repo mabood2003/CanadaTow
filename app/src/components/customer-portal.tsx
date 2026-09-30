@@ -7,27 +7,34 @@ import { CompanyConsentBlock, EstimateDocument, InvoiceDocument } from "@/compon
 import { Icon } from "@/components/icons";
 import { Banner, BrandMark, Button, CompanyMark, ErrorText, Field, inputClass, Loading } from "@/components/ui";
 import { baseForRole } from "@/lib/app-base";
+import { customerStatus, placeName } from "@/lib/customer-status";
 import type { Actor, Estimate, Invoice, Job } from "@/lib/domain";
-import { consentContext, renderConsent } from "@/lib/describe";
+import { consentContext, renderConsent, vehicleName } from "@/lib/describe";
 import { GuardrailError, recordConsent, recordDelivery } from "@/lib/jobs";
 import { jobHref } from "@/lib/job-steps";
+import { formatMoney } from "@/lib/money";
 import type { AppState } from "@/lib/seed";
-import { activeConsentTemplate, attempt, findJobByEstimateToken, findJobByInvoiceToken, mutateJob, useAppState } from "@/lib/store";
+import { activeConsentTemplate, attempt, findJobByEstimateToken, findJobByInvoiceToken, findJobByPublicToken, mutateJob, useAppState } from "@/lib/store";
 import { formatWhen } from "@/lib/time";
 import { currentInvoice, estimateConsent } from "@/lib/tow-rules";
 
-// Customer-facing: no login, no app. In the pilot prototype, links only resolve on the device that created the job.
-export function CustomerPortal({ kind, token }: { kind: "estimate" | "invoice"; token: string }) {
+type Tab = "status" | "estimate" | "invoice";
+
+const NOT_FOUND: Record<Tab, string> = { status: "Tow", estimate: "Estimate", invoice: "Invoice" };
+
+// Customer-facing: no login, no app. One link per job shows the tow's status plus the estimate and invoice.
+// In the pilot prototype, links only resolve on the device that holds the job.
+export function CustomerPortal({ kind, token }: { kind: Tab; token: string }) {
   const app = useAppState();
   if (!app) return <Loading />;
 
   const byEstimate = kind === "estimate" ? findJobByEstimateToken(app, token) : null;
   const byInvoice = kind === "invoice" ? findJobByInvoiceToken(app, token) : null;
-  const job = byEstimate?.job ?? byInvoice?.job;
+  const job = byEstimate?.job ?? byInvoice?.job ?? (kind === "status" ? findJobByPublicToken(app, token) : null);
   if (!job) {
     return (
       <main className="mx-auto max-w-md px-4 py-10">
-        <Banner tone="warn" title={`${kind === "estimate" ? "Estimate" : "Invoice"} not found`}>
+        <Banner tone="warn" title={`${NOT_FOUND[kind]} not found`}>
           This link isn&apos;t available on this device. Please ask your tow operator to show it to you on their device.
         </Banner>
       </main>
@@ -36,9 +43,10 @@ export function CustomerPortal({ kind, token }: { kind: "estimate" | "invoice"; 
   return <Portal app={app} job={job} estimate={byEstimate?.estimate ?? job.estimates.at(-1)} invoice={byInvoice?.invoice ?? currentInvoice(job)} initialTab={kind} />;
 }
 
-function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; job: Job; estimate?: Estimate; invoice?: Invoice; initialTab: "estimate" | "invoice" }) {
-  const [tab, setTab] = useState<"estimate" | "invoice">(initialTab === "invoice" || !estimate ? "invoice" : "estimate");
+function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; job: Job; estimate?: Estimate; invoice?: Invoice; initialTab: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab === "estimate" && !estimate ? "status" : initialTab === "invoice" && !invoice ? "status" : initialTab);
   const tel = app.company.phone.replace(/[^\d+]/g, "");
+  const tabs: Tab[] = ["status", ...(estimate ? (["estimate"] as const) : []), ...(invoice ? (["invoice"] as const) : [])];
 
   return (
     <div className="min-h-full bg-cream">
@@ -53,16 +61,17 @@ function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; jo
             Call
           </a>
         </div>
-        {estimate && invoice ? (
-          <nav className="no-print mx-auto flex max-w-md gap-1 px-4" aria-label="Documents">
-            {(["estimate", "invoice"] as const).map((t) => (
+        {tabs.length > 1 ? (
+          <nav className="no-print mx-auto flex max-w-md gap-1 px-4" aria-label="Your tow">
+            {tabs.map((t) => (
               <button
                 key={t}
                 type="button"
+                aria-pressed={tab === t}
                 onClick={() => setTab(t)}
                 className={`min-h-11 flex-1 rounded-t-md text-sm font-semibold transition ${tab === t ? "bg-cream text-forest" : "text-[#c7d3cb] hover:text-white"}`}
               >
-                {t === "estimate" ? "Estimate" : "Invoice"}
+                {t === "status" ? "Status" : t === "estimate" ? "Estimate" : "Invoice"}
               </button>
             ))}
           </nav>
@@ -70,6 +79,7 @@ function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; jo
       </header>
 
       <main className="mx-auto max-w-md space-y-4 px-4 pb-16 pt-5">
+        {tab === "status" ? <StatusTab app={app} job={job} estimate={estimate} invoice={invoice} onOpen={setTab} /> : null}
         {tab === "estimate" && estimate ? <EstimateTab app={app} job={job} estimate={estimate} invoice={invoice} onViewInvoice={() => setTab("invoice")} /> : null}
         {tab === "invoice" && invoice ? <InvoiceTab app={app} job={job} invoice={invoice} /> : null}
 
@@ -83,6 +93,104 @@ function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; jo
         </footer>
       </main>
     </div>
+  );
+}
+
+/** Where the vehicle is and every step of the tow so far, with the estimate and invoice one tap away. */
+function StatusTab({ app, job, estimate, invoice, onOpen }: { app: AppState; job: Job; estimate?: Estimate; invoice?: Invoice; onOpen: (tab: Tab) => void }) {
+  const status = customerStatus(job);
+  const yard = app.yards.find((y) => job.destination.startsWith(y.name));
+  const paidCents = invoice ? job.payments.filter((p) => p.invoiceNumber === invoice.number).reduce((sum, p) => sum + p.amountCents, 0) : 0;
+
+  return (
+    <>
+      <section className="rounded-lg bg-forest p-5 text-white shadow-[0_4px_0_#0e291c]" aria-live="polite">
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-signal">Your tow · Job #{job.number}</p>
+        <h1 className="mt-2 text-[26px] font-extrabold leading-tight tracking-[-0.04em]">{status.headline}</h1>
+        {job.vehicle.make || job.vehicle.plate ? (
+          <p className="mt-1 text-sm text-[#c7d3cb]">{[vehicleName(job.vehicle), job.vehicle.plate].filter(Boolean).join(" · ")}</p>
+        ) : null}
+        <div className="mt-4 flex items-start gap-2.5 rounded-md bg-white/10 p-3 text-sm">
+          <Icon name="mapPin" className="mt-0.5 h-4 w-4 text-signal" />
+          <span>
+            <span className="block text-xs text-[#b6c6bb]">Your vehicle right now</span>
+            <span className="font-semibold">{status.vehicleAt}</span>
+            {job.tow.delivered && yard ? <span className="mt-1 block text-xs text-[#c7d3cb]">Yard hours: {yard.hours}</span> : null}
+          </span>
+        </div>
+      </section>
+
+      {status.awaitingApproval ? (
+        <Button size="lg" full icon="check" onClick={() => onOpen("estimate")}>
+          Review and approve the estimate
+        </Button>
+      ) : null}
+
+      <section className="rounded-lg border border-line bg-white p-5">
+        <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Tow progress</h2>
+        <ol className="mt-4">
+          {status.steps.map((step, i) => (
+            <li key={step.key} className="relative flex gap-3 pb-5 last:pb-0">
+              {i < status.steps.length - 1 ? <span aria-hidden className={`absolute left-[11px] top-6 h-full w-0.5 ${step.state === "done" ? "bg-pine" : "bg-line"}`} /> : null}
+              <span
+                aria-hidden
+                className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full ${
+                  step.state === "done" ? "bg-forest text-signal" : step.state === "current" ? "bg-signal ring-4 ring-signal/40" : "border-2 border-line bg-white"
+                }`}
+              >
+                {step.state === "done" ? <Icon name="check" className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className={`text-[15px] font-semibold leading-snug ${step.state === "upcoming" ? "text-subtle" : "text-ink"}`}>
+                  {step.title}
+                  {step.state === "current" ? <span className="ml-2 rounded-full bg-signal/60 px-2 py-0.5 text-[11px] font-bold text-forest">Next</span> : null}
+                </p>
+                {step.at ? <p className="text-xs text-muted">{formatWhen(step.at)}</p> : null}
+                {step.detail ? <p className="mt-0.5 text-sm text-muted">{step.detail}</p> : null}
+                {step.document && step.state !== "upcoming" ? (
+                  <button type="button" onClick={() => onOpen(step.document!)} className="mt-1 inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-pine">
+                    View {step.document} <Icon name="arrowRight" className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {estimate || invoice ? (
+        <section className="grid gap-2">
+          {estimate ? (
+            <button type="button" onClick={() => onOpen("estimate")} className="flex items-center gap-3 rounded-lg border border-line bg-paper p-4 text-left hover:border-pine/50">
+              <Icon name="fileText" className="h-6 w-6 text-pine" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">Estimate{job.estimates.length > 1 ? ` (version ${estimate.version})` : ""}</span>
+                <span className="block text-xs text-muted">
+                  {formatMoney(estimate.totalCents)} · to {placeName(estimate.destination)}
+                </span>
+              </span>
+              <Icon name="chevronRight" className="h-5 w-5 text-subtle" />
+            </button>
+          ) : null}
+          {invoice ? (
+            <button type="button" onClick={() => onOpen("invoice")} className="flex items-center gap-3 rounded-lg border border-line bg-paper p-4 text-left hover:border-pine/50">
+              <Icon name="receipt" className="h-6 w-6 text-pine" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">Invoice {invoice.number}</span>
+                <span className="block text-xs text-muted">
+                  {formatMoney(invoice.totalCents)} · {paidCents >= invoice.totalCents ? "Paid" : `Balance ${formatMoney(invoice.totalCents - paidCents)}`}
+                </span>
+              </span>
+              <Icon name="chevronRight" className="h-5 w-5 text-subtle" />
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
+      <p className="text-center text-xs text-muted">
+        This page updates as your tow progresses. Questions? Call {app.company.name} at {app.company.phone}.
+      </p>
+    </>
   );
 }
 

@@ -285,6 +285,8 @@ export interface JobPrefill {
 export interface Job {
   id: string;
   number: string;
+  /** The customer's link for this job (/c/<token>): tow status plus the estimate and invoice. */
+  publicToken: string;
   createdAt: string;
   driverName: string;
   scenario?: ScenarioId;

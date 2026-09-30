@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import { appBase, type AppBase } from "@/lib/app-base";
 import type { Actor, Job, RateCard, RequestType, ScenarioId, TeamMember, Workflow } from "@/lib/domain";
-import { createJob, GuardrailError } from "@/lib/jobs";
+import { createJob, GuardrailError, newToken } from "@/lib/jobs";
 import { scenarioFor } from "@/lib/scenarios";
 import { buildSeedState, type AppState, type Sessions } from "@/lib/seed";
 import { currentConsentTemplate } from "@/lib/tow-rules";
@@ -19,7 +19,18 @@ function load(): AppState {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as AppState & { currentUserId?: string };
-      if (parsed.schemaVersion === 3) return migrate(parsed);
+      if (parsed.schemaVersion === 3) {
+        const migrated = migrate(parsed);
+        // Save upgrades right away so generated values (like link tokens) stay stable across reloads.
+        if (migrated !== parsed) {
+          try {
+            persist(migrated);
+          } catch {
+            // Out of space: keep the upgraded copy in memory rather than falling back to demo data.
+          }
+        }
+        return migrated;
+      }
     }
   } catch {
     // Corrupt or unavailable storage: fall back to demo data below.
@@ -33,18 +44,26 @@ function load(): AppState {
   return seeded;
 }
 
-/** Data saved before the owner / driver apps split had one shared "current user". */
+/** Upgrades data saved by earlier versions of the prototype. Returns the same object when nothing changed. */
 function migrate(saved: AppState & { currentUserId?: string }): AppState {
-  if (saved.sessions) return saved;
-  const { currentUserId, ...rest } = saved;
-  const me = saved.team.find((m) => m.id === currentUserId);
-  return {
-    ...rest,
-    sessions: {
-      driver: me?.role === "driver" ? me.id : (saved.team.find((m) => m.role === "driver" && !m.invited)?.id ?? null),
-      owner: me?.role === "owner" ? me.id : (saved.team.find((m) => m.role === "owner")?.id ?? null),
-    },
-  };
+  let next: AppState = saved;
+  // Before the owner / driver apps split there was one shared "current user".
+  if (!saved.sessions) {
+    const { currentUserId, ...rest } = saved;
+    const me = saved.team.find((m) => m.id === currentUserId);
+    next = {
+      ...rest,
+      sessions: {
+        driver: me?.role === "driver" ? me.id : (saved.team.find((m) => m.role === "driver" && !m.invited)?.id ?? null),
+        owner: me?.role === "owner" ? me.id : (saved.team.find((m) => m.role === "owner")?.id ?? null),
+      },
+    };
+  }
+  // Jobs created before the customer status link existed.
+  if (next.jobs.some((j) => !j.publicToken)) {
+    next = { ...next, jobs: next.jobs.map((j) => (j.publicToken ? j : { ...j, publicToken: newToken() })) };
+  }
+  return next;
 }
 
 function persist(next: AppState) {
@@ -231,6 +250,10 @@ export function findJobByEstimateToken(app: AppState, token: string) {
     if (estimate) return { job, estimate };
   }
   return null;
+}
+
+export function findJobByPublicToken(app: AppState, token: string) {
+  return app.jobs.find((j) => j.publicToken === token) ?? null;
 }
 
 export function findJobByInvoiceToken(app: AppState, token: string) {

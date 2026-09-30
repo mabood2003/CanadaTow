@@ -27,6 +27,13 @@ test("tour", async ({ page }) => {
   await shot(page, "01d-owner-dashboard-phone");
   await page.goto("/owner/team");
   await shot(page, "01e-owner-team-phone");
+  for (const n of ["1042", "1043"]) {
+    await page.goto("/owner/jobs");
+    await page.getByRole("link", { name: `#${n}` }).first().click();
+    await page.waitForURL(/\/owner\/jobs\/[^/?]+$/);
+    await page.goto((await page.getByRole("link", { name: "Customer's page" }).getAttribute("href"))!);
+    await shot(page, `01f-customer-status-${n}`);
+  }
 
   await page.goto("/demo");
   await page.getByRole("button", { name: "Start scenario" }).first().click();

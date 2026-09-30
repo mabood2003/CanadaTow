@@ -216,10 +216,14 @@ function JobRecordView({ app, job, type }: JobContext) {
               <Button full icon="package" onClick={() => setExporting(true)}>
                 Export job record
               </Button>
+              <LinkButton href={`/c/${job.publicToken}`} target="_blank" full variant="secondary" icon="link">
+                Customer&apos;s page
+              </LinkButton>
               <LinkButton href={jobHref(job, "audit")} full variant="secondary" icon="history">
                 Audit trail
               </LinkButton>
             </div>
+            <p className="mt-2 text-xs text-muted">The customer&apos;s link shows the tow&apos;s progress, the estimate and the invoice.</p>
           </Card>
 
           <Card>

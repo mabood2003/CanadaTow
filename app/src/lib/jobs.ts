@@ -69,6 +69,7 @@ export function createJob(input: {
   const job: Job = {
     id: newId("job-"),
     number: input.number,
+    publicToken: newToken(),
     createdAt: input.actor.now,
     driverName: input.actor.by,
     scenario: input.scenario,
