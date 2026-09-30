@@ -1,33 +1,28 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --muted: #475569;
-  --accent: #0f172a;
-  --success: #166534;
-  --warning: #b45309;
-  --danger: #b91c1c;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
 html {
-  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: radial-gradient(circle at top, #eef5ff 0%, #f8fafc 32%, #e2e8f0 100%);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
-* {
-  box-sizing: border-box;
+/* Customer documents: "Print" / "Download PDF" use the browser's print-to-PDF until server PDFs land. */
+@media print {
+  body {
+    background: white;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-plain {
+    box-shadow: none !important;
+    border: none !important;
+  }
 }

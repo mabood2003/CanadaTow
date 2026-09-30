@@ -1,58 +1,128 @@
-import { companyProfile } from "@/lib/prototype-data";
+"use client";
 
-export default function EstimateCustomerPage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
-  const token = "demo-estimate";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useState } from "react";
+
+import { EstimateDocument } from "@/components/documents";
+import { Banner, Button, Checkbox, ErrorText, Field, inputClass, Loading, PageShell } from "@/components/ui";
+import { recordConsent } from "@/lib/jobs";
+import { jobHref } from "@/lib/job-steps";
+import { attempt, findJobByEstimateToken, mutateJob, useAppState } from "@/lib/store";
+import { formatDateTime } from "@/lib/time";
+
+// Customer-facing: no login, no app chrome. In the pilot prototype, links only resolve on the device that created the job.
+export default function CustomerEstimatePage() {
+  const { token } = useParams<{ token: string }>();
+  const app = useAppState();
+  const [mode, setMode] = useState<"idle" | "consent" | "question">("idle");
+  const [name, setName] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!app) return <Loading />;
+  const found = findJobByEstimateToken(app, token);
+  if (!found) {
+    return (
+      <PageShell>
+        <Banner tone="warn" title="Estimate not found">
+          This link isn&apos;t available on this device. Please ask your tow operator to show you the estimate on their device.
+        </Banner>
+      </PageShell>
+    );
+  }
+
+  const { job, estimate } = found;
+  const consent = job.consents.find((c) => c.purpose === "estimate" && c.estimateVersion === estimate.version);
+  const signerName = name ?? estimate.customer.name;
+
+  const confirm = () => {
+    setError(
+      attempt(() => {
+        mutateJob(
+          job.id,
+          (j, actor) =>
+            recordConsent(j, actor, {
+              purpose: "estimate",
+              name: signerName,
+              relationship: j.customer.relationship,
+              present: j.customer.present,
+              method: "link",
+              driverConfirmed: false,
+            }),
+          { by: signerName.trim() || "Customer", device: "Customer link" },
+        );
+        setMode("idle");
+      }),
+    );
+  };
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4">
-      <div className="mx-auto max-w-md rounded-3xl bg-white p-5 shadow-lg ring-1 ring-slate-200">
-        <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-500">TowLedger</p>
-            <h1 className="text-2xl font-semibold">{companyProfile.name}</h1>
-          </div>
-          <div className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
-            Estimate #{token}
-          </div>
-        </div>
+    <PageShell>
+      <div className="space-y-4">
+        {estimate.supersededAt ? (
+          <Banner tone="bad" title="This estimate has been replaced">
+            A newer estimate was issued on {formatDateTime(estimate.supersededAt)}. Please ask your tow operator for the latest version.
+          </Banner>
+        ) : null}
 
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-medium text-slate-600">Vehicle</p>
-            <p className="text-lg font-semibold text-slate-900">ABC 123 · 2021 Toyota Corolla</p>
-          </div>
+        <EstimateDocument company={app.company} estimate={estimate} jobNumber={job.number} />
 
-          <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="font-medium text-slate-700">Estimated charges</span>
-              <span className="text-sm text-slate-500">GST included</span>
-            </div>
+        <div className="no-print space-y-3">
+          {consent ? (
+            <Banner tone="good" title="Consent received — thank you">
+              {consent.name} consented on {formatDateTime(consent.at)}. Keep this page or a copy of the estimate for your records.
+            </Banner>
+          ) : !estimate.supersededAt ? (
+            mode === "consent" ? (
+              <div className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                <Field label="Your full name">
+                  <input className={inputClass} value={signerName} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+                </Field>
+                <Checkbox checked={agreed} onChange={setAgreed}>
+                  I have read this estimate and I consent to {app.company.name} towing my vehicle to <strong>{estimate.destination}</strong>.
+                </Checkbox>
+                <ErrorText message={error} />
+                <Button size="lg" full variant="success" disabled={!agreed || !signerName.trim()} onClick={confirm}>
+                  Confirm consent
+                </Button>
+                <Button full variant="secondary" onClick={() => setMode("idle")}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="lg" variant="success" onClick={() => setMode("consent")}>
+                  I consent
+                </Button>
+                <Button size="lg" variant="secondary" onClick={() => setMode("question")}>
+                  I have a question
+                </Button>
+              </div>
+            )
+          ) : null}
 
-            <div className="space-y-2 text-sm text-slate-700">
-              <div className="flex justify-between"><span>Hook-up</span><span>$175.00</span></div>
-              <div className="flex justify-between"><span>18 km × $3.50</span><span>$63.00</span></div>
-              <div className="flex justify-between"><span>Winching</span><span>$90.00</span></div>
-              <div className="flex justify-between"><span>After-hours callout</span><span>$70.00</span></div>
-              <div className="flex justify-between"><span>Storage (2 days)</span><span>$70.00</span></div>
-              <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-900"><span>Total</span><span>$468.00</span></div>
-            </div>
-          </div>
+          {mode === "question" ? (
+            <Banner tone="info" title="Ask before you decide">
+              Talk to your driver, or call {app.company.name} at{" "}
+              <a className="font-semibold underline" href={`tel:${app.company.phone.replace(/[^\d+]/g, "")}`}>
+                {app.company.phone}
+              </a>
+              .
+            </Banner>
+          ) : null}
 
-          <div className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
-            <p className="font-semibold">Customer rights</p>
-            <p className="mt-1">You may ask questions about the estimate, review the tow and storage charges, and choose whether to consent before the tow proceeds.</p>
-          </div>
+          <Button full variant="secondary" onClick={() => window.print()}>
+            Print or save a copy
+          </Button>
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <button className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">I consent</button>
-            <button className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">I have a question</button>
-          </div>
+          <p className="pt-4 text-center text-xs text-slate-400">
+            <Link href={jobHref(job)} className="underline">
+              Driver: return to job {job.number}
+            </Link>
+          </p>
         </div>
       </div>
-    </main>
+    </PageShell>
   );
 }
