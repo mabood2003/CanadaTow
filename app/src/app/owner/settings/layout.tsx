@@ -14,6 +14,7 @@ const SECTIONS: { href: string; label: string; icon: IconName }[] = [
   { href: "/owner/settings/workflows", label: "Job categories & workflows", icon: "workflow" },
   { href: "/owner/settings/consent", label: "Consent template", icon: "shieldCheck" },
   { href: "/owner/settings/templates", label: "Document templates", icon: "fileText" },
+  { href: "/owner/settings/notifications", label: "Customer notifications", icon: "message" },
 ];
 
 export default function SettingsLayout({ children }: LayoutProps<"/owner/settings">) {

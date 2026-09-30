@@ -91,6 +91,8 @@ function SendEstimate({ app, job }: JobContext) {
         <div className="no-print">
           <h2 className="mb-2 text-lg font-extrabold tracking-tight">Give the customer their copy</h2>
           <SendPanel
+            job={job}
+            company={app.company}
             kind="estimate"
             path={`/e/${estimate.token}`}
             customer={estimate.customer}

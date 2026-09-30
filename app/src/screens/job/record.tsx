@@ -11,7 +11,10 @@ import { Banner, Button, Card, CheckRow, Chip, DataList, ErrorText, inputClass, 
 import { DELIVERY_LABELS, TOW_EVENT_LABELS, TOW_EVENTS } from "@/lib/domain";
 import { vehicleLine, vehicleName } from "@/lib/describe";
 import { appBase } from "@/lib/app-base";
+import type { OutboundMessage } from "@/lib/domain";
+import { MESSAGE_KIND_LABELS } from "@/lib/domain";
 import { saveNotes } from "@/lib/jobs";
+import { jobMessages } from "@/lib/messages";
 import { firstOpenStep, jobHref, jobSteps } from "@/lib/job-steps";
 import { formatMoney } from "@/lib/money";
 import { attempt, mutateJob } from "@/lib/store";
@@ -245,6 +248,8 @@ function JobRecordView({ app, job, type }: JobContext) {
             </ol>
           </Card>
 
+          <JobMessages messages={jobMessages(app.outbox, job.id)} />
+
           <Card>
             <SectionTitle right={<Link href={jobHref(job, "audit")} className="text-xs font-semibold text-pine">All {job.audit.length}</Link>}>Recent activity</SectionTitle>
             <AuditTrail entries={job.audit} limit={5} />
@@ -254,6 +259,32 @@ function JobRecordView({ app, job, type }: JobContext) {
 
       <ExportPackage company={app.company} job={job} open={exporting} onClose={() => setExporting(false)} />
     </PageShell>
+  );
+}
+
+/** Texts and emails sent to the customer about this job (prototype: recorded, not actually sent). */
+function JobMessages({ messages }: { messages: OutboundMessage[] }) {
+  return (
+    <Card>
+      <SectionTitle>Messages to the customer</SectionTitle>
+      {messages.length === 0 ? (
+        <p className="text-sm text-muted">None sent yet.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {messages.map((m) => (
+            <li key={m.id} className="flex items-start gap-2">
+              <Icon name={m.channel === "text" ? "message" : "mail"} className={`mt-0.5 h-4 w-4 ${m.status === "sent" ? "text-ok" : "text-subtle"}`} />
+              <span className="min-w-0">
+                <span className="font-medium">{MESSAGE_KIND_LABELS[m.kind]}</span>
+                <span className="block text-xs text-muted">
+                  {m.status === "sent" ? "Sent" : m.status === "scheduled" ? "Sending soon" : `Cancelled by ${m.cancelledBy}`} · {m.to} · {formatWhen(m.sentAt ?? m.cancelledAt ?? m.sendAt)}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

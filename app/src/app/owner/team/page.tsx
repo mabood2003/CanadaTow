@@ -11,7 +11,8 @@ import { GuardrailError, newId } from "@/lib/jobs";
 import { jobHref } from "@/lib/job-steps";
 import { driverSummaries, elapsed, LIVE_STAGE_LABELS } from "@/lib/owner-view";
 import type { AppState } from "@/lib/seed";
-import { attempt, setAppState, useAppState } from "@/lib/store";
+import { inviteMessage } from "@/lib/messages";
+import { actorFor, attempt, logMessages, setAppState, useAppState } from "@/lib/store";
 import { formatWhen } from "@/lib/time";
 
 export default function TeamPage() {
@@ -34,18 +35,18 @@ function Team({ app }: { app: AppState }) {
     const failure = attempt(() => {
       if (!name.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) throw new GuardrailError("Enter the driver's name and email.");
       if (app.team.some((m) => m.email.toLowerCase() === email.trim().toLowerCase())) throw new GuardrailError("Someone on the team already uses that email.");
-      console.info(`[prototype] driver-app invite to ${email.trim()}: ${window.location.origin}/driver`);
       setAppState((s) => ({ ...s, team: [...s.team, { id: newId("u-"), name: name.trim(), email: email.trim(), role: "driver", invited: true }] }));
+      logMessages([inviteMessage({ name: name.trim(), email: email.trim(), company: app.company, origin: window.location.origin, actor: actorFor(app) })]);
       setName("");
       setEmail("");
     });
     setError(failure);
-    setNotice(failure ? null : "Invite recorded. They open TowLedger Driver and choose their name to accept (prototype — no email sent).");
+    setNotice(failure ? null : "Invite recorded. They open TowLedger Driver and choose their name to accept (prototype — the email is in Messages, not actually sent).");
   };
 
-  const resend = (address: string) => {
-    console.info(`[prototype] resent driver-app invite to ${address}`);
-    setNotice(`Invite re-sent to ${address} (prototype — no email sent).`);
+  const resend = (member: { name: string; email: string }) => {
+    logMessages([inviteMessage({ name: member.name, email: member.email, company: app.company, origin: window.location.origin, actor: actorFor(app) })]);
+    setNotice(`Invite re-sent to ${member.email} (prototype — recorded in Messages, not actually sent).`);
   };
 
   return (
@@ -101,7 +102,7 @@ function Team({ app }: { app: AppState }) {
                   View jobs <Icon name="arrowRight" className="h-4 w-4" />
                 </Link>
                 {member.invited ? (
-                  <Button size="sm" variant="secondary" className="ml-auto" icon="mail" onClick={() => resend(member.email)}>
+                  <Button size="sm" variant="secondary" className="ml-auto" icon="mail" onClick={() => resend(member)}>
                     Resend invite
                   </Button>
                 ) : null}

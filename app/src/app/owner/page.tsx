@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 import { Icon, type IconName } from "@/components/icons";
 import { InstallApp } from "@/components/install-app";
@@ -14,21 +13,12 @@ import { formatMoney } from "@/lib/money";
 import { balanceCents, companyActivity, dashboardCounts, elapsed, LIVE_STAGE_LABELS, liveStage, needsAttention } from "@/lib/owner-view";
 import { currentUserName, useAppState } from "@/lib/store";
 import { formatTime, formatWhen } from "@/lib/time";
+import { useNow } from "@/lib/use-now";
 import { capitalize, jobRecord, jobStatus } from "@/lib/tow-rules";
 
 function greeting(nowMs: number) {
   const hour = Number(new Intl.DateTimeFormat("en-CA", { hour: "numeric", hourCycle: "h23", timeZone: "America/Edmonton" }).format(nowMs));
   return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-}
-
-/** Keeps "14 min on the road" current without a reload. */
-function useNow(intervalMs = 60_000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
 }
 
 export default function OwnerDashboard() {
@@ -183,6 +173,18 @@ export default function OwnerDashboard() {
             ))}
           </ol>
         </Card>
+        <Link href="/owner/messages" className="flex items-center gap-3 rounded-lg border border-line bg-paper p-4 hover:border-pine/50">
+          <Icon name="message" className="h-6 w-6 text-pine" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Customer messages</span>
+            <span className="block text-xs text-muted">
+              {app.outbox.filter((m) => m.status === "sent").length} sent
+              {app.outbox.some((m) => m.status === "scheduled") ? ` · ${app.outbox.filter((m) => m.status === "scheduled").length} about to send` : ""} · delivery notices{" "}
+              {app.notifications.deliveredAuto ? "automatic" : "manual"}
+            </span>
+          </span>
+          <Icon name="chevronRight" className="h-5 w-5 text-subtle" />
+        </Link>
         <Card>
           <SectionTitle>Install the app</SectionTitle>
           <InstallApp appName={OWNER_APP.name} />

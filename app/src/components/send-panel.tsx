@@ -4,8 +4,10 @@ import { useState } from "react";
 
 import { Icon, type IconName } from "@/components/icons";
 import { Banner, ErrorText, useOnline } from "@/components/ui";
-import type { Delivery, DeliveryMethod, JobCustomer } from "@/lib/domain";
+import type { Company, Delivery, DeliveryMethod, Job, JobCustomer } from "@/lib/domain";
 import { DELIVERY_LABELS } from "@/lib/domain";
+import { documentMessage } from "@/lib/messages";
+import { actorFor, getAppState, logMessages } from "@/lib/store";
 import { formatWhen } from "@/lib/time";
 
 const OPTIONS: { via: DeliveryMethod; label: string; icon: IconName }[] = [
@@ -20,6 +22,8 @@ const OPTIONS: { via: DeliveryMethod; label: string; icon: IconName }[] = [
  * Prototype: text and email are simulated (logged to the console) — Twilio / Resend come later.
  */
 export function SendPanel({
+  job,
+  company,
   kind,
   path,
   customer,
@@ -27,6 +31,8 @@ export function SendPanel({
   onDelivered,
   onShowOnDevice,
 }: {
+  job: Job;
+  company: Company;
   kind: "estimate" | "invoice";
   path: string;
   customer: Pick<JobCustomer, "mobile" | "email">;
@@ -38,14 +44,15 @@ export function SendPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const url = typeof window === "undefined" ? path : `${window.location.origin}${path}`;
-
   const choose = (via: DeliveryMethod) => {
     const to = via === "text" ? customer.mobile : via === "email" ? customer.email : undefined;
-    if (via === "text" || via === "email") console.info(`[prototype] ${via} to ${to}: Your ${kind}: ${url}`);
     const failure = onDelivered(via, to);
     setError(failure);
     if (failure) return;
+    if ((via === "text" || via === "email") && to) {
+      const app = getAppState();
+      logMessages([documentMessage({ kind, channel: via, to, job, company, path, origin: window.location.origin, actor: actorFor(app) })]);
+    }
     if (via === "device") return onShowOnDevice();
     if (via === "print") {
       setNotice("Recorded as a paper copy. Your device's print screen is opening.");

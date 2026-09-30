@@ -269,6 +269,48 @@ export interface AuditEntry {
   action: string;
 }
 
+// ---------------------------------------------------------------------------
+// Messages to customers and staff (prototype: simulated — recorded in the outbox, not really sent)
+
+export type MessageChannel = "text" | "email";
+export type MessageKind = "estimate" | "invoice" | "delivered" | "moved" | "invite";
+export type MessageStatus = "scheduled" | "sent" | "cancelled";
+
+export const MESSAGE_KIND_LABELS: Record<MessageKind, string> = {
+  estimate: "Estimate",
+  invoice: "Invoice",
+  delivered: "Vehicle delivered",
+  moved: "Vehicle moved",
+  invite: "Driver invite",
+};
+
+export interface OutboundMessage {
+  id: string;
+  kind: MessageKind;
+  channel: MessageChannel;
+  to: string;
+  subject?: string;
+  body: string;
+  jobId?: string;
+  jobNumber?: string;
+  createdAt: string;
+  createdBy: string;
+  /** Scheduled messages go out at this time unless cancelled first (the driver's undo window). */
+  sendAt: string;
+  status: MessageStatus;
+  sentAt?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+}
+
+/** Company choices for automatic customer messages. */
+export interface NotificationSettings {
+  /** Text/email the customer automatically when the driver taps Delivered. */
+  deliveredAuto: boolean;
+  /** Seconds the driver has to cancel before the delivered message goes out. */
+  undoSeconds: number;
+}
+
 /** Values a demo scenario suggests; forms start from these but the driver still confirms each screen. */
 export interface JobPrefill {
   requestTypeId?: string;

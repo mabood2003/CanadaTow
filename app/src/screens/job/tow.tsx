@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { DeliveredNotice } from "@/components/delivered-notice";
 import { PhotoCapture } from "@/components/evidence";
 import { Icon } from "@/components/icons";
 import { JobScreen, StepHeader, type JobContext } from "@/components/job-screen";
 import { Banner, Button, Card, CheckMark, DataList, ErrorText, Field, inputClass, LinkButton, PageShell, SectionTitle } from "@/components/ui";
 import type { Job } from "@/lib/domain";
 import { TOW_EVENT_LABELS, TOW_EVENTS, type TowEvent } from "@/lib/domain";
-import { addPhoto, recordDestinationChange, recordOwnerNotice, recordTowEvent } from "@/lib/jobs";
+import { addPhoto, recordDestinationChange, recordOwnerNotice } from "@/lib/jobs";
 import { jobHref } from "@/lib/job-steps";
+import { movedMessage } from "@/lib/messages";
 import { formatMoney } from "@/lib/money";
-import { attempt, mutateJob } from "@/lib/store";
+import { actorFor, attempt, logMessages, mutateJob, recordTowEventAndNotify } from "@/lib/store";
 import { formatTime, formatWhen, fromLocalInput, toLocalInput } from "@/lib/time";
 import { canRecordTowEvent, currentEstimate, estimateConsent, towGate } from "@/lib/tow-rules";
 
@@ -31,8 +33,9 @@ function TowStep({ app, job }: JobContext) {
   const secured = Boolean(job.tow.secured);
   const workflow = job.workflow;
 
+  // "Delivered" also schedules the company's automatic customer notice.
   const record = (event: TowEvent) => {
-    setError(attempt(() => mutateJob(job.id, (j, actor) => recordTowEvent(j, actor, event))));
+    setError(attempt(() => recordTowEventAndNotify(job.id, event)));
   };
 
   return (
@@ -168,6 +171,8 @@ function TowStep({ app, job }: JobContext) {
           />
         </Card>
 
+        {job.tow.delivered ? <DeliveredNotice app={app} job={job} /> : null}
+
         {job.tow.delivered ? (
           <LinkButton href={jobHref(job, "invoice")} size="lg" full replace trailing="arrowRight">
             Continue to invoice
@@ -219,10 +224,11 @@ function DestinationChangeForm({ app, job, onDone }: Pick<JobContext, "app" | "j
 
   const save = () => {
     const failure = attempt(() => {
-      if (via === "Text message" && job.customer.mobile) {
-        console.info(`[prototype] text to ${job.customer.mobile}: Your vehicle ${job.vehicle.plate} has been moved to ${to}. — ${app.company.name} ${app.company.phone}`);
-      }
+      const before = job;
       mutateJob(job.id, (j, actor) => recordDestinationChange(j, actor, { to, requestedBy, at: fromLocalInput(when) ?? undefined, note, ownerNotifiedVia: via }));
+      if (via === "Text message") {
+        logMessages([movedMessage({ job: before, to: to.trim(), company: app.company, origin: window.location.origin, actor: actorFor(app) })]);
+      }
       onDone();
     });
     setError(failure);

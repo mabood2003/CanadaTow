@@ -6,6 +6,8 @@ import type {
   ConsentTemplate,
   DocumentTemplates,
   Job,
+  NotificationSettings,
+  OutboundMessage,
   RateCard,
   RequestType,
   TeamMember,
@@ -13,8 +15,10 @@ import type {
   Yard,
 } from "@/lib/domain";
 import { consentContext, renderConsent } from "@/lib/describe";
+import { deliveredMessages, describeRecipients, documentMessage } from "@/lib/messages";
 import {
   addPhoto,
+  audit,
   createJob,
   issueEstimate,
   issueInvoice,
@@ -28,6 +32,8 @@ import {
   updateDetails,
 } from "@/lib/jobs";
 import { currentConsentTemplate, currentEstimate } from "@/lib/tow-rules";
+
+export const DEFAULT_NOTIFICATIONS: NotificationSettings = { deliveredAuto: true, undoSeconds: 30 };
 
 /** Team-member id signed in to each app, or null when signed out. */
 export interface Sessions {
@@ -48,6 +54,9 @@ export interface AppState {
   team: TeamMember[];
   /** Who is signed in to each app on this device (pilot stand-in for real sign-in). */
   sessions: Sessions;
+  /** Every text and email to customers and staff (prototype: simulated sending). */
+  outbox: OutboundMessage[];
+  notifications: NotificationSettings;
   jobs: Job[];
   counters: { job: number };
   /** Interview mode: show the offline experience without disconnecting. */
@@ -293,6 +302,18 @@ export function buildSeedState(nowMs = Date.now()): AppState {
   };
   const DAY = 24 * 60;
   const yard = `${seedYards[0].name} — ${seedYards[0].address}`;
+  const outbox: OutboundMessage[] = [];
+  const sendDocument = (job: Job, kind: "estimate" | "invoice", channel: "text" | "email", to: string, actor: Actor) => {
+    const path = kind === "estimate" ? `/e/${currentEstimate(job)!.token}` : `/i/${job.invoices.at(-1)!.token}`;
+    outbox.push(documentMessage({ kind, channel, to, job, company: seedCompany, path, origin: "", actor }));
+  };
+  // Delivered notices go out automatically; record them (and their audit row) right after delivery.
+  const notifyDelivered = (job: Job, minutesAgo: number) => {
+    const system = at(nowMs, minutesAgo, "TowLedger", "system", "Server");
+    const sent = deliveredMessages({ job, company: seedCompany, yards: seedYards, origin: "", actor: system, delaySeconds: 0 });
+    outbox.push(...sent);
+    return sent.length ? audit(job, system, `Customer notified that the vehicle was delivered — ${describeRecipients(sent)}`) : job;
+  };
 
   // #1039 — Police-directed (Workflow C), complete.
   let police = prepared(config, nowMs, 3 * DAY + 90, "Mike Chen", {
@@ -337,6 +358,7 @@ export function buildSeedState(nowMs = Date.now()): AppState {
   complete = recordTowEvent(complete, at(nowMs, 2 * DAY + 57, "Terry Boyd"), "arrived");
   complete = issue(config, complete, at(nowMs, 2 * DAY + 55, "Terry Boyd"), "owner_customer");
   complete = recordDelivery(complete, at(nowMs, 2 * DAY + 54, "Terry Boyd"), "estimate", "text", "(403) 555-0192");
+  sendDocument(complete, "estimate", "text", "(403) 555-0192", at(nowMs, 2 * DAY + 54, "Terry Boyd"));
   complete = recordConsent(complete, at(nowMs, 2 * DAY + 48, "Priya Nair", "customer", "Customer link"), {
     purpose: "estimate",
     name: "Priya Nair",
@@ -350,9 +372,11 @@ export function buildSeedState(nowMs = Date.now()): AppState {
   complete = recordTowEvent(complete, at(nowMs, 2 * DAY + 45, "Terry Boyd"), "secured");
   complete = recordTowEvent(complete, at(nowMs, 2 * DAY + 40, "Terry Boyd"), "departed");
   complete = recordTowEvent(complete, at(nowMs, 2 * DAY + 14, "Terry Boyd"), "delivered");
+  complete = notifyDelivered(complete, 2 * DAY + 13);
   complete = startInvoiceDraft(complete);
   complete = issueInvoice(complete, at(nowMs, 2 * DAY + 9, "Terry Boyd"), config.documentTemplates.invoiceNotes);
   complete = recordDelivery(complete, at(nowMs, 2 * DAY + 8, "Terry Boyd"), "invoice", "email", "priya.nair@example.com");
+  sendDocument(complete, "invoice", "email", "priya.nair@example.com", at(nowMs, 2 * DAY + 8, "Terry Boyd"));
   complete = recordPayment(complete, at(nowMs, 2 * DAY + 2, "Dana Whitford", "owner", "Computer"), { amountCents: complete.invoices[0].totalCents, method: "Debit" });
 
   // #1041 — Delivered yesterday, invoice never issued: needs attention.
@@ -383,6 +407,7 @@ export function buildSeedState(nowMs = Date.now()): AppState {
   problem = recordTowEvent(problem, at(nowMs, DAY + 105, "Mike Chen"), "secured");
   problem = recordTowEvent(problem, at(nowMs, DAY + 100, "Mike Chen"), "departed");
   problem = recordTowEvent(problem, at(nowMs, DAY + 78, "Mike Chen"), "delivered");
+  problem = notifyDelivered(problem, DAY + 77);
 
   // #1042 — Motor club (Workflow B): estimate texted, waiting for the customer.
   let waiting = prepared(config, nowMs, 38, "Terry Boyd", {
@@ -399,6 +424,7 @@ export function buildSeedState(nowMs = Date.now()): AppState {
   });
   waiting = issue(config, waiting, at(nowMs, 30, "Terry Boyd"), "motor_club");
   waiting = recordDelivery(waiting, at(nowMs, 29, "Terry Boyd"), "estimate", "text", "(403) 555-0791");
+  sendDocument(waiting, "estimate", "text", "(403) 555-0791", at(nowMs, 29, "Terry Boyd"));
   waiting = recordTowEvent(waiting, at(nowMs, 20, "Terry Boyd"), "arrived");
 
   // #1043 — Private-property (Workflow D): on the road right now, so the owner app has a live tow to show.
@@ -429,6 +455,8 @@ export function buildSeedState(nowMs = Date.now()): AppState {
     yards: seedYards,
     team: seedTeam,
     sessions: { driver: "u-terry", owner: "u-owner" },
+    outbox: outbox.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    notifications: DEFAULT_NOTIFICATIONS,
     jobs: [onRoad, waiting, problem, complete, police],
     counters: { job: 1044 },
     simulateOffline: false,

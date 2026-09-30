@@ -10,7 +10,7 @@ import { setAppBase, type AppBase } from "@/lib/app-base";
 import { initials } from "@/lib/describe";
 import { jobHref } from "@/lib/job-steps";
 import type { AppState } from "@/lib/seed";
-import { attempt, currentUser, setAppState, signIn, signOut, startJob, useAppState, type AppKind } from "@/lib/store";
+import { attempt, currentUser, setAppState, signIn, signOut, startJob, useAppState, useOutboxFlusher, type AppKind } from "@/lib/store";
 
 interface NavItem {
   href: string;
@@ -30,6 +30,8 @@ const OWNER_NAV: NavItem[] = [
   { href: "/owner/jobs", label: "Jobs", icon: "fileCheck", match: (p) => p.startsWith("/owner/jobs") },
   { href: "/owner/team", label: "Team", icon: "users", match: (p) => p.startsWith("/owner/team") },
   { href: "/owner/settings", label: "Company setup", icon: "sliders", match: (p) => p.startsWith("/owner/settings") },
+  // Laptop nav only; on the phone Messages is reached from the dashboard.
+  { href: "/owner/messages", label: "Messages", icon: "message", match: (p) => p.startsWith("/owner/messages") },
 ];
 
 /** Bottom tabs only on top-level screens; inside a job the screen's own back link and buttons lead. */
@@ -43,6 +45,7 @@ function showTabs(path: string, items: NavItem[]) {
 export function DriverShell({ children }: { children: ReactNode }) {
   setAppBase("/driver");
   const app = useAppState();
+  useOutboxFlusher(app);
   const path = usePathname();
   if (!app) return <Loading />;
   const user = currentUser(app, "driver");
@@ -74,6 +77,7 @@ export function DriverShell({ children }: { children: ReactNode }) {
 export function OwnerShell({ children }: { children: ReactNode }) {
   setAppBase("/owner");
   const app = useAppState();
+  useOutboxFlusher(app);
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   if (!app) return <Loading />;

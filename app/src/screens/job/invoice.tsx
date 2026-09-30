@@ -194,6 +194,8 @@ function IssuedInvoice({ app, job }: JobContext) {
       <div className="no-print">
         <h2 className="mb-2 text-lg font-extrabold tracking-tight">Give the customer their invoice</h2>
         <SendPanel
+          job={job}
+          company={app.company}
           kind="invoice"
           path={`/i/${invoice.token}`}
           customer={invoice.customer}

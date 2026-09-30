@@ -76,6 +76,7 @@ test("tour", async ({ page }) => {
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Departed", exact: true }).click();
   await page.getByRole("button", { name: "Delivered", exact: true }).click();
+  await shot(page, "13b-delivered-notice");
   await page.getByRole("link", { name: "Continue to invoice" }).click();
   await page.getByRole("button", { name: /More Mileage/ }).click();
   await shot(page, "14-invoice-builder");
@@ -103,6 +104,11 @@ test("tour", async ({ page }) => {
   await shot(page, "24b-owner-dashboard-desktop");
   await page.goto("/owner/team");
   await shot(page, "24c-owner-team-desktop");
+  await page.goto("/owner/messages");
+  await page.getByRole("button", { name: /^Vehicle delivered/ }).first().click();
+  await shot(page, "24d-owner-messages");
+  await page.goto("/owner/settings/notifications");
+  await shot(page, "24e-owner-notifications");
   await page.goto("/demo");
   await shot(page, "25-demo");
   await page.getByRole("button", { name: /Start as the owner/ }).click();
