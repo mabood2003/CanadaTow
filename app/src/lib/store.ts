@@ -7,45 +7,70 @@ import type { Actor, Job, OutboundMessage, RateCard, RequestType, ScenarioId, Te
 import { audit, createJob, GuardrailError, newToken, recordTowEvent } from "@/lib/jobs";
 import { scenarioFor } from "@/lib/scenarios";
 import { cancelDelivered, deliveredMessages, describeRecipients, flushDue, pendingDelivered } from "@/lib/messages";
-import { buildSeedState, DEFAULT_NOTIFICATIONS, type AppState, type Sessions } from "@/lib/seed";
+import type { CompanyAccount, PlatformState } from "@/lib/platform";
+import { DEFAULT_NOTIFICATIONS, type AppState, type Sessions } from "@/lib/seed";
+import { buildPlatformSeed } from "@/lib/seed-platform";
 import { currentConsentTemplate } from "@/lib/tow-rules";
 
-const STORAGE_KEY = "towledger:v3";
+// The device holds the whole TowLedger platform: every company's data plus the admin console's.
+// The driver and owner apps work on one company at a time (the "active" company).
+const STORAGE_KEY = "towledger:platform:v1";
+/** Before the admin console, the device held a single company under this key. */
+const LEGACY_KEY = "towledger:v3";
 
-let state: AppState | null = null;
+let platform: PlatformState | null = null;
 const listeners = new Set<() => void>();
 
-function load(): AppState {
+function tryPersist(next: PlatformState) {
+  try {
+    persist(next);
+  } catch {
+    // Out of space / private mode: keep working in memory rather than falling back to demo data.
+  }
+}
+
+function load(): PlatformState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AppState & { currentUserId?: string };
-      if (parsed.schemaVersion === 3) {
-        const migrated = migrate(parsed);
+      const parsed = JSON.parse(raw) as PlatformState;
+      if (parsed.schemaVersion === 1 && parsed.companies?.length) {
+        const migrated = migratePlatform(parsed);
         // Save upgrades right away so generated values (like link tokens) stay stable across reloads.
-        if (migrated !== parsed) {
-          try {
-            persist(migrated);
-          } catch {
-            // Out of space: keep the upgraded copy in memory rather than falling back to demo data.
-          }
-        }
+        if (migrated !== parsed) tryPersist(migrated);
         return migrated;
+      }
+    }
+    // A phone that used the single-company prototype: its data becomes Summit's, alongside the demo companies.
+    const legacy = window.localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as AppState & { currentUserId?: string };
+      if (parsed.schemaVersion === 3) {
+        const upgraded = buildPlatformSeed(Date.now(), migrate(parsed));
+        tryPersist(upgraded);
+        return upgraded;
       }
     }
   } catch {
     // Corrupt or unavailable storage: fall back to demo data below.
   }
-  const seeded = buildSeedState();
-  try {
-    persist(seeded);
-  } catch {
-    // Private mode etc.: keep working in memory.
-  }
+  const seeded = buildPlatformSeed();
+  tryPersist(seeded);
   return seeded;
 }
 
-/** Upgrades data saved by earlier versions of the prototype. Returns the same object when nothing changed. */
+function migratePlatform(saved: PlatformState): PlatformState {
+  let changed = false;
+  const companies = saved.companies.map((c) => {
+    const data = migrate(c.data);
+    if (data === c.data) return c;
+    changed = true;
+    return { ...c, data };
+  });
+  return changed ? { ...saved, companies } : saved;
+}
+
+/** Upgrades a company's data saved by earlier versions of the prototype. Returns the same object when nothing changed. */
 function migrate(saved: AppState & { currentUserId?: string }): AppState {
   let next: AppState = saved;
   // Before the owner / driver apps split there was one shared "current user".
@@ -71,7 +96,7 @@ function migrate(saved: AppState & { currentUserId?: string }): AppState {
   return next;
 }
 
-function persist(next: AppState) {
+function persist(next: PlatformState) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch (error) {
@@ -94,7 +119,7 @@ function subscribe(listener: () => void) {
   // Another tab (e.g. the customer estimate page) wrote to storage: reload so the driver sees it live.
   const onStorage = (event: StorageEvent) => {
     if (event.key === STORAGE_KEY) {
-      state = load();
+      platform = load();
       emit();
     }
   };
@@ -105,12 +130,21 @@ function subscribe(listener: () => void) {
   };
 }
 
-function getSnapshot(): AppState {
-  if (!state) state = load();
-  return state;
+function getPlatformSnapshot(): PlatformState {
+  if (!platform) platform = load();
+  return platform;
 }
 
-function getServerSnapshot(): AppState | null {
+export function activeAccount(p: PlatformState = getPlatformSnapshot()): CompanyAccount {
+  return p.companies.find((c) => c.id === p.activeCompanyId) ?? p.companies[0];
+}
+
+/** The active company's data — what the driver and owner apps show. */
+function getSnapshot(): AppState {
+  return activeAccount().data;
+}
+
+function getServerSnapshot(): null {
   return null;
 }
 
@@ -124,18 +158,47 @@ export function useAppState(): AppState | null {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-export function setAppState(updater: (current: AppState) => AppState) {
-  const next = updater(getSnapshot());
+/** Every company plus the admin console's state (admin screens, customer links, sign-in). */
+export function usePlatform(): PlatformState | null {
+  return useSyncExternalStore(subscribe, getPlatformSnapshot, getServerSnapshot);
+}
+
+export function getPlatform(): PlatformState {
+  return getPlatformSnapshot();
+}
+
+export function setPlatform(updater: (current: PlatformState) => PlatformState) {
+  const next = updater(getPlatformSnapshot());
   persist(next);
-  state = next;
+  platform = next;
   emit();
 }
 
+/** Updates one company's data. */
+export function setCompanyData(companyId: string, updater: (current: AppState) => AppState) {
+  setPlatform((p) => ({ ...p, companies: p.companies.map((c) => (c.id === companyId ? { ...c, data: updater(c.data) } : c)) }));
+}
+
+/** Updates the active company's data (driver and owner apps). */
+export function setAppState(updater: (current: AppState) => AppState) {
+  setCompanyData(activeAccount().id, updater);
+}
+
+/** Interview mode: restores every demo company and signs the admin console out. */
 export function resetDemoData() {
-  const seeded = buildSeedState();
+  const seeded = buildPlatformSeed();
   persist(seeded);
-  state = seeded;
+  platform = seeded;
   emit();
+}
+
+/** Pilot sign-in: pick which company this device's driver and owner apps belong to. */
+export function switchCompany(companyId: string) {
+  setPlatform((p) => ({ ...p, activeCompanyId: companyId }));
+}
+
+function companyOfJob(p: PlatformState, jobId: string): CompanyAccount | undefined {
+  return p.companies.find((c) => c.data.jobs.some((j) => j.id === jobId));
 }
 
 export function deviceLabel(): string {
@@ -206,6 +269,9 @@ export function yardDestination(app: AppState): string {
 
 /** Creates a job (optionally from a demo scenario) and returns its id. */
 export function startJob(scenarioId?: ScenarioId): string {
+  if (activeAccount().status === "paused") {
+    throw new GuardrailError("Your company's TowLedger account is paused, so new tows can't be started. Existing records are still available. Contact TowLedger.");
+  }
   let id = "";
   setAppState((current) => {
     const scenario = scenarioFor(scenarioId);
@@ -225,10 +291,15 @@ export function startJob(scenarioId?: ScenarioId): string {
   return id;
 }
 
-/** Applies a job change (throws on guardrail violations) and returns the updated job. */
+/**
+ * Applies a job change (throws on guardrail violations) and returns the updated job.
+ * Writes to whichever company owns the job — a customer's link can belong to any company on this device.
+ */
 export function mutateJob(jobId: string, change: (job: Job, actor: Actor, app: AppState) => Job, actorOverride?: Partial<Actor>): Job {
   let updated: Job | undefined;
-  setAppState((app) => {
+  const owner = companyOfJob(getPlatformSnapshot(), jobId);
+  if (!owner) throw new GuardrailError("Job not found on this device.");
+  setCompanyData(owner.id, (app) => {
     const actor = actorFor(app, actorOverride);
     return {
       ...app,
@@ -317,18 +388,22 @@ export function logMessages(messages: (OutboundMessage | null)[]) {
   if (real.length) setAppState((s) => ({ ...s, outbox: [...real, ...s.outbox] }));
 }
 
-/** Sends whatever is due. Held while offline, so scheduled notices go out when the connection returns. */
+/** Sends whatever is due, for every company on this device. Held while offline, so notices go out when the connection returns. */
 export function flushOutbox() {
-  const app = getSnapshot();
-  if (app.simulateOffline || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+  if (getAppState().simulateOffline || (typeof navigator !== "undefined" && !navigator.onLine)) return;
   const now = new Date().toISOString();
-  if (!app.outbox.some((m) => m.status === "scheduled" && m.sendAt <= now)) return;
-  setAppState((s) => ({ ...s, ...flushDue(s.outbox, s.jobs, now) }));
+  const due = (data: AppState) => data.outbox.some((m) => m.status === "scheduled" && m.sendAt <= now);
+  if (!getPlatformSnapshot().companies.some((c) => due(c.data))) return;
+  setPlatform((p) => ({
+    ...p,
+    companies: p.companies.map((c) => (due(c.data) ? { ...c, data: { ...c.data, ...flushDue(c.data.outbox, c.data.jobs, now) } } : c)),
+  }));
 }
 
 /** Runs in each app shell: sends due messages every second while any are scheduled. */
-export function useOutboxFlusher(app: AppState | null) {
-  const hasScheduled = Boolean(app?.outbox.some((m) => m.status === "scheduled"));
+export function useOutboxFlusher() {
+  const p = usePlatform();
+  const hasScheduled = Boolean(p?.companies.some((c) => c.data.outbox.some((m) => m.status === "scheduled")));
   useEffect(() => {
     if (!hasScheduled) return;
     flushOutbox();
@@ -356,6 +431,24 @@ export function attempt(action: () => void): string | null {
     if (error instanceof GuardrailError || error instanceof StorageError) return error.message;
     throw error;
   }
+}
+
+/** Finds the company and job behind a customer link (/c, /e or /i), across every company on this device. */
+export function findCustomerLink(p: PlatformState, kind: "status" | "estimate" | "invoice", token: string) {
+  for (const account of p.companies) {
+    const app = account.data;
+    if (kind === "estimate") {
+      const found = findJobByEstimateToken(app, token);
+      if (found) return { app, job: found.job, estimate: found.estimate, invoice: undefined };
+    } else if (kind === "invoice") {
+      const found = findJobByInvoiceToken(app, token);
+      if (found) return { app, job: found.job, estimate: undefined, invoice: found.invoice };
+    } else {
+      const job = findJobByPublicToken(app, token);
+      if (job) return { app, job, estimate: undefined, invoice: undefined };
+    }
+  }
+  return null;
 }
 
 export function findJobByEstimateToken(app: AppState, token: string) {

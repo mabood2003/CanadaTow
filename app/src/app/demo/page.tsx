@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { Banner, BrandMark, Button, Card, Kicker, Loading, OfflineBanner, PageShell, SectionTitle, Toggle } from "@/components/ui";
@@ -11,13 +11,19 @@ import type { ScenarioId } from "@/lib/domain";
 import { endSentence } from "@/lib/describe";
 import { jobHref } from "@/lib/job-steps";
 import { SCENARIOS } from "@/lib/scenarios";
-import { attempt, resetDemoData, setAppState, signIn, startJob, useAppState } from "@/lib/store";
+import { DEMO_COMPANY_ID } from "@/lib/seed-platform";
+import { attempt, getPlatform, resetDemoData, setAppState, signIn, startJob, switchCompany, useAppState } from "@/lib/store";
 
 export default function DemoPage() {
   const app = useAppState();
   const router = useRouter();
   const [resetAt, setResetAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Interview mode always runs on the demo company, whichever company this device was last signed in to.
+  useEffect(() => {
+    if (getPlatform().companies.some((c) => c.id === DEMO_COMPANY_ID) && getPlatform().activeCompanyId !== DEMO_COMPANY_ID) switchCompany(DEMO_COMPANY_ID);
+  }, []);
 
   if (!app) return <Loading />;
 

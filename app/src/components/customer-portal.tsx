@@ -14,7 +14,7 @@ import { GuardrailError, recordConsent, recordDelivery } from "@/lib/jobs";
 import { jobHref } from "@/lib/job-steps";
 import { formatMoney } from "@/lib/money";
 import type { AppState } from "@/lib/seed";
-import { activeConsentTemplate, attempt, findJobByEstimateToken, findJobByInvoiceToken, findJobByPublicToken, mutateJob, useAppState } from "@/lib/store";
+import { activeConsentTemplate, attempt, findCustomerLink, mutateJob, usePlatform } from "@/lib/store";
 import { formatWhen } from "@/lib/time";
 import { currentInvoice, estimateConsent } from "@/lib/tow-rules";
 
@@ -25,13 +25,12 @@ const NOT_FOUND: Record<Tab, string> = { status: "Tow", estimate: "Estimate", in
 // Customer-facing: no login, no app. One link per job shows the tow's status plus the estimate and invoice.
 // In the pilot prototype, links only resolve on the device that holds the job.
 export function CustomerPortal({ kind, token }: { kind: Tab; token: string }) {
-  const app = useAppState();
-  if (!app) return <Loading />;
+  const platform = usePlatform();
+  if (!platform) return <Loading />;
 
-  const byEstimate = kind === "estimate" ? findJobByEstimateToken(app, token) : null;
-  const byInvoice = kind === "invoice" ? findJobByInvoiceToken(app, token) : null;
-  const job = byEstimate?.job ?? byInvoice?.job ?? (kind === "status" ? findJobByPublicToken(app, token) : null);
-  if (!job) {
+  // The link can belong to any company on this device, not just the one the staff apps are signed in to.
+  const found = findCustomerLink(platform, kind, token);
+  if (!found) {
     return (
       <main className="mx-auto max-w-md px-4 py-10">
         <Banner tone="warn" title={`${NOT_FOUND[kind]} not found`}>
@@ -40,7 +39,8 @@ export function CustomerPortal({ kind, token }: { kind: Tab; token: string }) {
       </main>
     );
   }
-  return <Portal app={app} job={job} estimate={byEstimate?.estimate ?? job.estimates.at(-1)} invoice={byInvoice?.invoice ?? currentInvoice(job)} initialTab={kind} />;
+  const { app, job } = found;
+  return <Portal app={app} job={job} estimate={found.estimate ?? job.estimates.at(-1)} invoice={found.invoice ?? currentInvoice(job)} initialTab={kind} />;
 }
 
 function Portal({ app, job, estimate, invoice, initialTab }: { app: AppState; job: Job; estimate?: Estimate; invoice?: Invoice; initialTab: Tab }) {

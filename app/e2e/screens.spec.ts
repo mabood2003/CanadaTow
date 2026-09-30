@@ -109,6 +109,16 @@ test("tour", async ({ page }) => {
   await shot(page, "24d-owner-messages");
   await page.goto("/owner/settings/notifications");
   await shot(page, "24e-owner-notifications");
+  await page.goto("/admin");
+  await page.getByRole("button", { name: /Bilal Saad/ }).click();
+  await shot(page, "40-admin-companies");
+  await page.getByRole("link", { name: "Prairie Roadside Recovery Inc." }).first().click();
+  await shot(page, "41-admin-company");
+  await page.getByRole("radio", { name: "Jobs" }).click();
+  await page.getByRole("button", { name: /#1002/ }).click();
+  await shot(page, "42-admin-company-jobs");
+  await page.goto("/admin/companies/new");
+  await shot(page, "43-admin-onboard");
   await page.goto("/demo");
   await shot(page, "25-demo");
   await page.getByRole("button", { name: /Start as the owner/ }).click();

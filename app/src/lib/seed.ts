@@ -207,7 +207,7 @@ export const seedTeam: TeamMember[] = [
 ];
 
 // Tiny illustrations so the sample records have real evidence attached.
-const DEMO_SIGNATURE =
+export const DEMO_SIGNATURE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120"><path d="M20 80 C60 20, 90 110, 130 60 S190 30, 220 75 S280 90, 300 50" stroke="#152019" stroke-width="3" fill="none"/></svg>',
@@ -219,11 +219,11 @@ export const DEMO_PHOTO =
     '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320"><rect width="480" height="320" fill="#dfe3d9"/><rect y="230" width="480" height="90" fill="#9aa39a"/><path d="M90 220 L130 160 Q140 146 160 146 L310 146 Q330 146 345 160 L395 205 Q410 208 410 222 L410 236 L70 236 L70 228 Q70 220 90 220Z" fill="#24573d"/><path d="M150 160 L175 150 L235 150 L235 196 L130 196Z M250 150 L300 150 Q312 150 322 158 L352 196 L250 196Z" fill="#cfe0d6"/><circle cx="140" cy="238" r="26" fill="#152019"/><circle cx="140" cy="238" r="11" fill="#b9c5bc"/><circle cx="340" cy="238" r="26" fill="#152019"/><circle cx="340" cy="238" r="11" fill="#b9c5bc"/><text x="20" y="34" font-family="monospace" font-size="16" fill="#152019">PHOTO · ON ARRIVAL</text></svg>',
   );
 
-function at(base: number, minutesAgo: number, by: string, role: Actor["role"] = "driver", device = "Phone"): Actor {
+export function at(base: number, minutesAgo: number, by: string, role: Actor["role"] = "driver", device = "Phone"): Actor {
   return { by, role, device, now: new Date(base - minutesAgo * 60_000).toISOString() };
 }
 
-interface Config {
+export interface Config {
   company: Company;
   rateCards: RateCard[];
   workflows: Workflow[];
@@ -240,7 +240,7 @@ function configFor(config: Config, requestTypeId: string) {
 }
 
 /** Same steps the UI takes: request → customer → vehicle → estimate → deliver → consent. */
-function prepared(
+export function prepared(
   config: Config,
   base: number,
   start: number,
@@ -280,12 +280,12 @@ function prepared(
   return saveEstimateDraft(job, job.estimateDraft.map((i) => (i.id === "km" ? { ...i, quantity: input.km } : i)));
 }
 
-function issue(config: Config, job: Job, actor: Actor, requestTypeId: string) {
+export function issue(config: Config, job: Job, actor: Actor, requestTypeId: string) {
   const { rateCard } = configFor(config, requestTypeId);
   return issueEstimate(job, actor, { storagePerDayCents: rateCard.storagePerDayCents, rateCardName: rateCard.name, notes: config.documentTemplates.estimateNotes });
 }
 
-function consentInput(config: Config, job: Job) {
+export function consentInput(config: Config, job: Job) {
   const template = currentConsentTemplate(config.consentTemplates);
   const rendered = renderConsent(template, consentContext(config.company.name, job, currentEstimate(job)));
   return { templateVersion: rendered.templateVersion, heading: rendered.heading, wording: rendered.wording };

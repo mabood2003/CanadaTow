@@ -5,13 +5,21 @@ TowLedger helps Alberta towing companies deliver estimates, capture their own co
 - **TowLedger Driver** (`/driver`): the operator app for the phone. It covers starting a tow, the estimate, consent, tow times and the invoice at the roadside. Drivers see only their own jobs.
 - **TowLedger Owner** (`/owner`): for running the company, on a phone or a laptop. It shows every job, what needs attention, who's on the road, unpaid invoices, the team and company setup. Owners can also run a tow themselves.
 
-Each app has its own name, icon, manifest and URL scope, so both can sit on one home screen. The customer link (`/e/<token>`, `/i/<token>`) needs no app or login.
+Each app has its own name, icon, manifest and URL scope, so both can sit on one home screen. Two more surfaces:
+
+- **Customer link** (`/c/<token>`): no app or login. It shows the tow's live status, with the estimate and invoice built in.
+- **TowLedger admin console** (`/admin`, web): for the TowLedger team. It covers every company on TowLedger, onboarding, a read-only support view, and a message log.
 
 **Product boundary:** each towing company controls its forms, rates, wording and workflows. TowLedger provides tools to deliver, capture, organize and retain the resulting records. It doesn't decide which legal rules apply to a job.
 
 ## What's in the prototype
 
-Everything runs on the device (localStorage) with a fictional demo company, **Summit Towing Ltd.** Supabase, real sign-in, real text/email sending and server PDFs come later.
+Everything runs on the device (localStorage) with fictional companies:
+- **Summit Towing Ltd.**, the interview company.
+- **Prairie Roadside Recovery Inc.**, a pilot with jobs.
+- **Northgate Towing**, which is still onboarding.
+
+Texts and emails are **simulated**: every message is recorded in the outbox (owner **Messages**, admin **Message log**) but nothing is actually sent. Customer links only open on the device that holds the data. Supabase, real sign-in, Twilio/Resend sending and server PDFs come with the backend.
 
 | Area | Where |
 | --- | --- |
@@ -23,10 +31,13 @@ Everything runs on the device (localStorage) with a fictional demo company, **Su
 | Job record and audit trail (both apps) | `…/jobs/<id>`, `…/jobs/<id>/audit` |
 | Team: what each driver is doing now, open jobs, last activity, invite / resend | `/owner/team` |
 | Company setup: profile & logo, rate cards, job categories → workflows A–D, consent template with version history, document templates | `/owner/settings` |
-| Customer link: branded estimate, the company's consent wording, invoice on the same link | `/e/<token>`, `/i/<token>` |
+| **Customer link**: live tow status (where the vehicle is now; estimate sent → approved → arrived → secured → on the way → moves → delivered → invoice → paid), with the estimate (consent) and invoice as tabs | `/c/<token>` (also `/e/<token>`, `/i/<token>`) |
+| **Delivered notice**: tapping Delivered texts/emails the customer where the vehicle is, yard hours and their link. The driver gets a countdown with Cancel / Send now; while offline it waits for the connection. | Tow screen |
+| Owner messages and notification settings: every text/email sent, auto-send on/off, undo window | `/owner/messages`, `/owner/settings/notifications` |
+| **Admin console**: companies overview (status, owner, drivers, jobs, needs attention, unpaid, last active); onboard a company from the starting template (owner is invited); read-only support view (overview, jobs with audit trails, messages, setup); pause / status / internal notes; message log across companies; admin activity log of every view and change | `/admin` |
 | Interview mode: start as owner, three scripted scenarios, simulate offline, one-tap reset | `/demo` |
 
-**Sign-in (pilot stand-in):** each app has its own session on the device. Open the app and pick your name (drivers in the driver app, owners in the owner app). An invited driver accepts the invite by signing in. Email sign-in links come with the backend.
+**Sign-in (pilot stand-in):** each app has its own session on the device. Open the app, choose the company and pick your name (drivers in the driver app, owners in the owner app). An invited driver or owner accepts the invite by signing in. The admin console has its own TowLedger-team sign-in. Email sign-in links come with the backend.
 
 Guardrails (unit-tested): the tow can't start until the company's configured pre-tow steps are done; payment can't be recorded before the invoice is issued; issued estimates, consents and invoices never change (corrections create new versions); every change writes an audit row.
 

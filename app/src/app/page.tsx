@@ -58,6 +58,11 @@ export default function Home() {
         <Link href="/demo" className="font-semibold text-pine">
           Interview mode
         </Link>
+        <span className="mx-2 text-line">·</span>
+        TowLedger team?{" "}
+        <Link href="/admin" className="font-semibold text-pine">
+          Admin console
+        </Link>
       </p>
     </main>
   );

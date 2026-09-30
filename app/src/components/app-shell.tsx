@@ -5,12 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { Icon, type IconName } from "@/components/icons";
-import { BrandMark, CompanyMark, ErrorText, Loading, OfflineBanner } from "@/components/ui";
+import { BrandMark, CompanyMark, ErrorText, inputClass, Loading, OfflineBanner } from "@/components/ui";
 import { setAppBase, type AppBase } from "@/lib/app-base";
 import { initials } from "@/lib/describe";
 import { jobHref } from "@/lib/job-steps";
 import type { AppState } from "@/lib/seed";
-import { attempt, currentUser, setAppState, signIn, signOut, startJob, useAppState, useOutboxFlusher, type AppKind } from "@/lib/store";
+import { activeAccount, attempt, currentUser, setAppState, signIn, signOut, startJob, switchCompany, useAppState, useOutboxFlusher, usePlatform, type AppKind } from "@/lib/store";
 
 interface NavItem {
   href: string;
@@ -45,7 +45,7 @@ function showTabs(path: string, items: NavItem[]) {
 export function DriverShell({ children }: { children: ReactNode }) {
   setAppBase("/driver");
   const app = useAppState();
-  useOutboxFlusher(app);
+  useOutboxFlusher();
   const path = usePathname();
   if (!app) return <Loading />;
   const user = currentUser(app, "driver");
@@ -55,6 +55,7 @@ export function DriverShell({ children }: { children: ReactNode }) {
   return (
     <div className={tabs ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : ""}>
       <OfflineBanner />
+      <PausedBanner />
       <header className="no-print sticky top-0 z-40 border-b border-ink/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4">
           <BrandMark small />
@@ -77,7 +78,7 @@ export function DriverShell({ children }: { children: ReactNode }) {
 export function OwnerShell({ children }: { children: ReactNode }) {
   setAppBase("/owner");
   const app = useAppState();
-  useOutboxFlusher(app);
+  useOutboxFlusher();
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   if (!app) return <Loading />;
@@ -88,6 +89,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
   return (
     <div className={tabs ? "pb-[calc(72px+env(safe-area-inset-bottom))] lg:pb-0" : ""}>
       <OfflineBanner />
+      <PausedBanner />
       <header className="no-print sticky top-0 z-40 border-b border-ink/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:h-16 sm:px-6">
           <Link href="/owner" className="flex min-w-0 items-center gap-2.5">
@@ -234,6 +236,36 @@ function OwnerTabs({ path }: { path: string }) {
 // ---------------------------------------------------------------------------
 // Sign-in (pilot: pick your name; email sign-in links come with the backend)
 
+/** Shown in both apps when TowLedger has paused the company's account: records stay available, new tows don't. */
+function PausedBanner() {
+  const platform = usePlatform();
+  if (!platform || activeAccount(platform).status !== "paused") return null;
+  return (
+    <div role="status" className="no-print bg-danger px-4 py-2.5 text-center text-sm font-semibold text-white">
+      This company&apos;s TowLedger account is paused. Records are available; new tows can&apos;t be started. Contact TowLedger.
+    </div>
+  );
+}
+
+/** Pilot stand-in for real sign-in: choose the company, then your name. */
+function CompanyPicker({ kind }: { kind: AppKind }) {
+  const platform = usePlatform();
+  if (!platform || platform.companies.length < 2) return null;
+  const active = activeAccount(platform);
+  return (
+    <label className="mt-6 block">
+      <span className="mb-1.5 block text-sm font-semibold">Company</span>
+      <select className={inputClass} value={active.id} onChange={(e) => switchCompany(e.target.value)} aria-label={`Company for the ${kind} app`}>
+        {platform.companies.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.data.company.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function SignIn({ app, kind }: { app: AppState; kind: AppKind }) {
   const people = app.team.filter((m) => m.role === kind);
   const other: { href: AppBase; label: string } = kind === "driver" ? { href: "/owner", label: "Owner? Open TowLedger Owner" } : { href: "/driver", label: "Driver? Open TowLedger Driver" };
@@ -257,6 +289,7 @@ function SignIn({ app, kind }: { app: AppState; kind: AppKind }) {
       <p className="mt-2 text-sm text-muted">
         {kind === "driver" ? "Choose your name to see your jobs and start a tow." : "The owner app is for running the company: every job, the team and company setup."}
       </p>
+      <CompanyPicker kind={kind} />
 
       <ul className="mt-6 space-y-2">
         {people.map((m) => (
