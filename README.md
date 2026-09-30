@@ -7,6 +7,7 @@ TowLedger is a phone-first Alberta towing workflow prototype designed to support
 This repository now includes a working full-flow prototype covering milestones 1 through 7, including:
 
 - app setup and phone-ready shell
+- company onboarding and operator profile setup
 - requester and workflow screens
 - consent capture flow and tow details
 - estimate builder, review and customer link
@@ -14,6 +15,8 @@ This repository now includes a working full-flow prototype covering milestones 1
 - tow in progress and invoice flow
 - compliance file, problem state and office jobs list
 - offline banner and demo scenarios
+
+The home screen now includes a company setup panel so the business profile, yard, and invited drivers are part of the operating workflow instead of a static mockup.
 
 ## Run locally
 
