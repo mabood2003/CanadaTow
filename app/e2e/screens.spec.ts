@@ -110,7 +110,7 @@ test("tour", async ({ page }) => {
   await page.goto("/owner/settings/notifications");
   await shot(page, "24e-owner-notifications");
   await page.goto("/admin");
-  await page.getByRole("button", { name: /Bilal Saad/ }).click();
+  await page.getByRole("button", { name: /Sign in as TowLedger Team/ }).click();
   await shot(page, "40-admin-companies");
   await page.getByRole("link", { name: "Prairie Roadside Recovery Inc." }).first().click();
   await shot(page, "41-admin-company");

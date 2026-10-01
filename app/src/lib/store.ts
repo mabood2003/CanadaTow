@@ -9,7 +9,7 @@ import { scenarioFor } from "@/lib/scenarios";
 import { cancelDelivered, deliveredMessages, describeRecipients, flushDue, pendingDelivered } from "@/lib/messages";
 import type { CompanyAccount, PlatformState } from "@/lib/platform";
 import { DEFAULT_NOTIFICATIONS, type AppState, type Sessions } from "@/lib/seed";
-import { buildPlatformSeed } from "@/lib/seed-platform";
+import { buildPlatformSeed, seedAdmins, TEAM_ADMIN } from "@/lib/seed-platform";
 import { currentConsentTemplate } from "@/lib/tow-rules";
 
 // The device holds the whole TowLedger platform: every company's data plus the admin console's.
@@ -67,7 +67,10 @@ function migratePlatform(saved: PlatformState): PlatformState {
     changed = true;
     return { ...c, data };
   });
-  return changed ? { ...saved, companies } : saved;
+  const next = changed ? { ...saved, companies } : saved;
+  // Before the single shared team account, each admin had their own sign-in.
+  const singleAdmin = saved.admins.length === 1 && saved.admins[0].id === TEAM_ADMIN.id;
+  return singleAdmin ? next : { ...next, admins: seedAdmins, adminSession: saved.adminSession ? TEAM_ADMIN.id : null };
 }
 
 /** Upgrades a company's data saved by earlier versions of the prototype. Returns the same object when nothing changed. */

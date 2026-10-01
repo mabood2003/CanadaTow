@@ -25,10 +25,10 @@ export default function AdminCompanyPage() {
   const platform = usePlatform();
   const [tab, setTab] = useState<Tab>("overview");
 
-  // Every look inside a company's records is logged.
+  // Opening a company's records is logged once per visit (switching tabs or jobs isn't a new entry).
   useEffect(() => {
-    attempt(() => recordAdminView(id, TAB_LABELS[tab].toLowerCase()));
-  }, [id, tab]);
+    attempt(() => recordAdminView(id));
+  }, [id]);
 
   if (!platform) return <Loading />;
   const account = platform.companies.find((c) => c.id === id);
@@ -176,11 +176,7 @@ function Jobs({ account }: { account: CompanyAccount }) {
   const jobs = [...account.data.jobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   if (jobs.length === 0) return <p className="py-10 text-center text-sm text-muted">No jobs yet.</p>;
 
-  const toggle = (jobId: string, number: string) => {
-    const next = open === jobId ? null : jobId;
-    setOpen(next);
-    if (next) attempt(() => recordAdminView(account.id, `job #${number} record and audit trail`));
-  };
+  const toggle = (jobId: string) => setOpen(open === jobId ? null : jobId);
 
   return (
     <ul className="space-y-2">
@@ -189,7 +185,7 @@ function Jobs({ account }: { account: CompanyAccount }) {
         const expanded = open === job.id;
         return (
           <li key={job.id} className="overflow-hidden rounded-lg border border-line bg-white">
-            <button type="button" aria-expanded={expanded} onClick={() => toggle(job.id, job.number)} className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-paper">
+            <button type="button" aria-expanded={expanded} onClick={() => toggle(job.id)} className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-paper">
               <span className="font-bold">#{job.number}</span>
               <span className="min-w-0 flex-1 truncate">{job.vehicle.make ? vehicleName(job.vehicle) : job.vehicle.plate || "Vehicle not recorded"}</span>
               <span className="text-sm text-muted">{job.driverName}</span>

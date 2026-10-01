@@ -58,21 +58,17 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
         </p>
         <h1 className="mt-10 text-[32px] font-extrabold leading-none tracking-[-0.05em]">TowLedger team sign-in</h1>
         <p className="mt-2 text-sm text-muted">For the TowLedger team only. Every company you open and every change you make is recorded in the admin activity log.</p>
-        <ul className="mt-6 space-y-2">
-          {platform.admins.map((a) => (
-            <li key={a.id}>
-              <button type="button" onClick={() => adminSignIn(a.id)} className="flex min-h-16 w-full items-center gap-3 rounded-lg border border-line bg-paper px-4 text-left hover:border-pine/50">
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-ink font-mono text-xs font-bold text-signal">{initials(a.name)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{a.name}</span>
-                  <span className="block text-xs text-muted">{a.email}</span>
-                </span>
-                <Icon name="arrowRight" className="h-5 w-5 text-pine" />
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-6 text-xs text-muted">Pilot sign-in: choose your name. Real accounts with two-step sign-in come with the backend.</p>
+        {platform.admins.slice(0, 1).map((a) => (
+          <button key={a.id} type="button" onClick={() => adminSignIn(a.id)} className="mt-6 flex min-h-16 w-full items-center gap-3 rounded-lg border border-line bg-paper px-4 text-left hover:border-pine/50">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-ink font-mono text-xs font-bold text-signal">{initials(a.name)}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">Sign in as {a.name}</span>
+              <span className="block text-xs text-muted">{a.email}</span>
+            </span>
+            <Icon name="arrowRight" className="h-5 w-5 text-pine" />
+          </button>
+        ))}
+        <p className="mt-6 text-xs text-muted">Pilot sign-in: one shared team account. Real accounts with two-step sign-in come with the backend.</p>
         <Link href="/" className="mt-auto pt-10 text-sm font-semibold text-pine">
           ← TowLedger apps
         </Link>
