@@ -76,19 +76,22 @@ export function saveCompanyNotes(companyId: string, notes: string) {
   });
 }
 
-/** Support access is read-only, and every look inside a company's records is logged. */
-export function recordAdminView(companyId: string, what: string) {
+/** How long one support visit to a company lasts in the activity log: re-opening it within this window isn't logged again. */
+export const ADMIN_VIEW_WINDOW_MS = 30 * 60_000;
+
+/** Support access is read-only; opening a company's records is logged once per visit, not on every tab or job. */
+export function recordAdminView(companyId: string) {
   setPlatform((p) => {
     const admin = currentAdmin(p);
     if (!admin) return p;
     const now = new Date().toISOString();
-    const action = `Viewed ${companyName(p, companyId)} — ${what}`;
-    const last = p.adminAudit.at(-1);
-    // Re-opening the same screen within a few seconds is one look, not two.
-    if (last && last.by === admin.name && last.action === action && Date.parse(now) - Date.parse(last.at) < 5000) return p;
+    const action = `Opened ${companyName(p, companyId)} (read-only support view)`;
+    const recent = p.adminAudit.some((e) => e.companyId === companyId && e.action === action && Date.parse(now) - Date.parse(e.at) < ADMIN_VIEW_WINDOW_MS);
+    if (recent) return p;
     return adminAudit(p, admin.name, now, action, companyId);
   });
 }
+
 
 export function resendOwnerInvite(companyId: string) {
   setPlatform((p) => {

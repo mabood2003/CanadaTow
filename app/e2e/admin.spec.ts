@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 async function signIn(page: Page) {
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "TowLedger team sign-in" })).toBeVisible();
-  await page.getByRole("button", { name: /Bilal Saad/ }).click();
+  await page.getByRole("button", { name: /Sign in as TowLedger Team/ }).click();
   await expect(page.getByRole("heading", { name: "Companies on TowLedger" })).toBeVisible();
 }
 
@@ -50,7 +50,7 @@ test("onboard a company; its owner signs in to the owner app", async ({ page }) 
   await expect(page.getByText(/Onboarded Foothills Recovery Ltd\. from the TowLedger starting template/)).toBeVisible();
 });
 
-test("support view is read-only and every look is logged", async ({ page }) => {
+test("support view is read-only and each visit is logged once", async ({ page }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Summit Towing Ltd." }).first().click();
   await expect(page.getByText("support view (read-only)", { exact: false })).toBeVisible();
@@ -59,8 +59,8 @@ test("support view is read-only and every look is logged", async ({ page }) => {
   await expect(page.getByRole("columnheader", { name: "Event" })).toBeVisible();
 
   await page.getByRole("radio", { name: "Admin activity" }).click();
-  await expect(page.getByText("Viewed Summit Towing Ltd. — job #1041 record and audit trail")).toBeVisible();
-  await expect(page.getByText("Viewed Summit Towing Ltd. — jobs")).toBeVisible();
+  // Switching tabs and opening jobs is one visit, not an entry per click.
+  await expect(page.getByText("Opened Summit Towing Ltd. (read-only support view)")).toHaveCount(1);
 });
 
 test("pausing a company stops new tows in its apps", async ({ page }) => {

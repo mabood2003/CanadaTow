@@ -5,10 +5,9 @@ import { issueInvoice, recordConsent, recordDelivery, recordPayment, recordTowEv
 import { companyFromTemplate, type CompanyAccount, type PlatformAdmin, type PlatformState } from "@/lib/platform";
 import { at, buildSeedState, consentInput, issue, prepared, type AppState } from "@/lib/seed";
 
-export const seedAdmins: PlatformAdmin[] = [
-  { id: "admin-bilal", name: "Bilal Saad", email: "bilal@towledger.example" },
-  { id: "admin-mohamed", name: "Mohamed Abood", email: "mohamed@towledger.example" },
-];
+/** One shared TowLedger team account for the admin console. */
+export const TEAM_ADMIN: PlatformAdmin = { id: "admin-team", name: "TowLedger Team", email: "team@towledger.example" };
+export const seedAdmins: PlatformAdmin[] = [TEAM_ADMIN];
 
 const DAY = 24 * 60;
 
@@ -16,7 +15,7 @@ const DAY = 24 * 60;
 export const DEMO_COMPANY_ID = "co-summit";
 
 function prairie(nowMs: number): AppState {
-  const onboarded: Actor = at(nowMs, 6 * DAY, "Mohamed Abood", "system", "TowLedger admin");
+  const onboarded: Actor = at(nowMs, 6 * DAY, TEAM_ADMIN.name, "system", "TowLedger admin");
   const base = companyFromTemplate(
     {
       name: "Prairie Roadside Recovery Inc.",
@@ -114,7 +113,7 @@ function northgate(nowMs: number): AppState {
       yardAddress: "11820 142 St NW, Edmonton",
       yardHours: "24/7 release by appointment",
     },
-    at(nowMs, DAY + 90, "Bilal Saad", "system", "TowLedger admin"),
+    at(nowMs, DAY + 90, TEAM_ADMIN.name, "system", "TowLedger admin"),
     "",
   );
 }
@@ -122,9 +121,9 @@ function northgate(nowMs: number): AppState {
 export function buildPlatformSeed(nowMs = Date.now(), summit: AppState = buildSeedState(nowMs)): PlatformState {
   const iso = (minutesAgo: number) => new Date(nowMs - minutesAgo * 60_000).toISOString();
   const companies: CompanyAccount[] = [
-    { id: DEMO_COMPANY_ID, status: "pilot", createdAt: "2026-01-12T17:00:00.000Z", createdBy: "Mohamed Abood", notes: "Interview / demo company. Calgary, 3 drivers.", data: summit },
-    { id: "co-prairie", status: "pilot", createdAt: iso(6 * DAY), createdBy: "Mohamed Abood", notes: "Red Deer pilot. Motor-club heavy; asked about QuickBooks export.", data: prairie(nowMs) },
-    { id: "co-northgate", status: "onboarding", createdAt: iso(DAY + 90), createdBy: "Bilal Saad", notes: "Owner invited; hasn't signed in yet.", data: northgate(nowMs) },
+    { id: DEMO_COMPANY_ID, status: "pilot", createdAt: "2026-01-12T17:00:00.000Z", createdBy: TEAM_ADMIN.name, notes: "Interview / demo company. Calgary, 3 drivers.", data: summit },
+    { id: "co-prairie", status: "pilot", createdAt: iso(6 * DAY), createdBy: TEAM_ADMIN.name, notes: "Red Deer pilot. Motor-club heavy; asked about QuickBooks export.", data: prairie(nowMs) },
+    { id: "co-northgate", status: "onboarding", createdAt: iso(DAY + 90), createdBy: TEAM_ADMIN.name, notes: "Owner invited; hasn't signed in yet.", data: northgate(nowMs) },
   ];
   return {
     schemaVersion: 1,
@@ -133,8 +132,8 @@ export function buildPlatformSeed(nowMs = Date.now(), summit: AppState = buildSe
     companies,
     activeCompanyId: DEMO_COMPANY_ID,
     adminAudit: [
-      { id: "aa-1", at: iso(6 * DAY), by: "Mohamed Abood", action: "Onboarded Prairie Roadside Recovery Inc. from the TowLedger starting template; invited owner Kelsey Morin", companyId: "co-prairie" },
-      { id: "aa-2", at: iso(DAY + 90), by: "Bilal Saad", action: "Onboarded Northgate Towing from the TowLedger starting template; invited owner Sandeep Gill", companyId: "co-northgate" },
+      { id: "aa-1", at: iso(6 * DAY), by: TEAM_ADMIN.name, action: "Onboarded Prairie Roadside Recovery Inc. from the TowLedger starting template; invited owner Kelsey Morin", companyId: "co-prairie" },
+      { id: "aa-2", at: iso(DAY + 90), by: TEAM_ADMIN.name, action: "Onboarded Northgate Towing from the TowLedger starting template; invited owner Sandeep Gill", companyId: "co-northgate" },
     ],
   };
 }
